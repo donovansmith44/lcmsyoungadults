@@ -15,8 +15,11 @@ export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
-// In dev with VITE_USE_EMULATOR=1, point at local emulators.
+// In dev with VITE_USE_EMULATOR=1, point at local emulators. Use the page's own
+// hostname (not a hard-coded 'localhost') so the app also works when opened from
+// another device on the LAN (e.g. a phone at http://<pc-lan-ip>:5173).
 if (import.meta.env.VITE_USE_EMULATOR === '1') {
-  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true })
-  connectFirestoreEmulator(db, 'localhost', 8080)
+  const emulatorHost = window.location.hostname
+  connectAuthEmulator(auth, `http://${emulatorHost}:9099`, { disableWarnings: true })
+  connectFirestoreEmulator(db, emulatorHost, 8080)
 }
