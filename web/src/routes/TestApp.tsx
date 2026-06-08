@@ -15,12 +15,19 @@ import { Question } from './Question'
 import { SharingPrompt } from './SharingPrompt'
 import { Result } from './Result'
 import { RevealBanner } from '../ui/RevealBanner'
-import type { AnswerValue } from '../domain/types'
+import type { AnswerValue, Answers } from '../domain/types'
 import type { SessionDoc } from '../data/sessions'
 
+const STORAGE_KEY = 'lya.personality.username'
+function storedUsername(): string | null {
+  try { return localStorage.getItem(STORAGE_KEY) } catch { return null }
+}
+
 export function TestApp() {
-  const [username, setUsername] = useState<string | null>(null)
-  const [phase, setPhase] = useState<'landing' | 'test' | 'sharing' | 'result'>('landing')
+  const [username, setUsername] = useState<string | null>(() => storedUsername())
+  const [phase, setPhase] = useState<'landing' | 'test' | 'sharing' | 'result'>(() => (storedUsername() ? 'test' : 'landing'))
+  const [index, setIndex] = useState(0)
+  const [resumed, setResumed] = useState(false)
   const { session } = useActiveSession()
   const taker = useTaker(username)
   const now = useNow(1000)
@@ -29,17 +36,28 @@ export function TestApp() {
 
   const firstUnanswered = useMemo(() => {
     if (!taker) return 0
-    const idx = OEJTS_ITEMS.findIndex((i) => taker.answers?.[i.id] === undefined)
+    const idx = OEJTS_ITEMS.findIndex((i) => taker.answers?.[String(i.id)] === undefined)
     return idx === -1 ? OEJTS_ITEMS.length : idx
   }, [taker])
 
+  // On first taker load (e.g. a refresh resume), jump to the first unanswered item.
+  useEffect(() => {
+    if (taker && !resumed) {
+      setIndex(Math.min(firstUnanswered, OEJTS_ITEMS.length - 1))
+      setResumed(true)
+    }
+  }, [taker, resumed, firstUnanswered])
+
   const onBegin = async (name: string) => {
+    try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
     setUsername(name)
+    setIndex(0)
+    setResumed(true)
     await upsertTaker(db, name)
     setPhase('test')
   }
 
-  // Resume completed takers straight to the result.
+  // A completed taker (e.g. refresh after finishing) resumes on the result.
   useEffect(() => {
     if (taker?.completed && phase === 'test') setPhase('result')
   }, [taker?.completed, phase])
@@ -47,17 +65,20 @@ export function TestApp() {
   const onAnswer = async (itemId: number, value: AnswerValue) => {
     if (!username) return
     await recordAnswer(db, username, itemId, value)
-    if (firstUnanswered + 1 >= OEJTS_ITEMS.length) setPhase('sharing')
+    // brief pause so the selection registers visually, then auto-advance
+    setTimeout(() => {
+      if (index + 1 >= OEJTS_ITEMS.length) setPhase('sharing')
+      else setIndex(index + 1)
+    }, 180)
   }
 
   const onChooseShare = async (share: boolean) => {
     if (!username || !taker) return
     await setSharing(db, username, share)
-    await submitTest(db, username, taker.answers as unknown as import('../domain/types').Answers, session?.id ?? null)
+    await submitTest(db, username, taker.answers as unknown as Answers, session?.id ?? null)
     setPhase('result')
   }
 
-  // T countdown + freeze fallback
   const startMs = session ? sessionStartMs(session) : 0
   const t = session ? computeT(startMs, session.timerMinutes, now) : 0
   useEffect(() => {
@@ -70,8 +91,9 @@ export function TestApp() {
 
   if (phase === 'landing' || !username) return <Landing onBegin={onBegin} />
 
-  if (phase === 'test' && taker) {
-    const idx = Math.min(firstUnanswered, OEJTS_ITEMS.length - 1)
+  if (phase === 'test') {
+    if (!taker) return <div className="screen"><div className="screen-center serif" style={{ opacity: 0.6 }}>Loading…</div></div>
+    const idx = Math.min(index, OEJTS_ITEMS.length - 1)
     return (
       <>
         {taker.group && t === 0 && <RevealBanner group={taker.group} />}
@@ -81,6 +103,8 @@ export function TestApp() {
           item={OEJTS_ITEMS[idx]}
           value={taker.answers?.[String(OEJTS_ITEMS[idx].id)]}
           onAnswer={onAnswer}
+          onBack={() => setIndex(Math.max(0, idx - 1))}
+          canBack={idx > 0}
         />
       </>
     )

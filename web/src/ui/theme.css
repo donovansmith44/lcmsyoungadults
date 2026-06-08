@@ -1,41 +1,80 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital@0;1&display=swap');
+/* Brochure-faithful design system. Fonts + palette mirror the printed LYA
+   brochure (assets vendored at /public/brand). Mobile-first. */
+
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('/brand/fonts/Montserrat-variable.ttf') format('truetype-variations');
+}
+@font-face {
+  font-family: 'Cormorant';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/brand/fonts/CormorantGaramond-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Cormorant';
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url('/brand/fonts/CormorantGaramond-Italic.ttf') format('truetype');
+}
 
 :root {
   --teal: #01404f;
+  --teal-soft: #2c6675;
   --pink: #fad5cd;
   --pink-deep: #f5bbb0;
   --cream: #fff8f2;
   --white: #fff;
+  --warm: #cc7a63;       /* warm pole accent, drawn from the brochure salmon family */
+  --warm-soft: #e3a892;
   --font-ui: 'Montserrat', system-ui, sans-serif;
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-serif: 'Cormorant', Georgia, serif;
   --radius: 16px;
-  --shadow: 0 10px 30px rgba(1, 64, 79, 0.18);
+  --shadow: 0 18px 50px rgba(1, 64, 79, 0.18);
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
 body {
-  margin: 0;
   font-family: var(--font-ui);
   color: var(--teal);
-  background: var(--cream);
-}
-.serif { font-family: var(--font-serif); font-style: italic; }
-.screen {
+  background: radial-gradient(120% 80% at 50% -10%, var(--pink) 0%, var(--pink) 38%, var(--cream) 100%) fixed;
   min-height: 100dvh;
+}
+
+.serif { font-family: var(--font-serif); font-style: italic; }
+.eyebrow {
+  font-weight: 600;
+  font-size: .72rem;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: var(--teal);
+  opacity: .68;
+}
+
+/* One centered, phone-width column for every screen. */
+.screen {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(env(safe-area-inset-top), 16px) 22px max(env(safe-area-inset-bottom), 24px);
+}
+.screen-center {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
   text-align: center;
-  gap: 1rem;
+  gap: .5rem;
 }
-.card {
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 1.5rem;
-  width: min(28rem, 100%);
-}
-a.clean { color: var(--teal); text-decoration: none; font-weight: 700; }
-a.clean:hover { text-decoration: none; opacity: 0.8; }
+
+a.clean { color: var(--teal); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+a.clean:hover { opacity: .8; }
