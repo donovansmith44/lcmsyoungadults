@@ -78,3 +78,12 @@ body {
 
 a.clean { color: var(--teal); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 a.clean:hover { opacity: .8; }
+
+/* Utilitarian card, used by the internal /admin screens. */
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  width: 100%;
+}
