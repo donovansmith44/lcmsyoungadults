@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital@0;1&display=swap');
+
+:root {
+  --teal: #01404f;
+  --pink: #fad5cd;
+  --pink-deep: #f5bbb0;
+  --cream: #fff8f2;
+  --white: #fff;
+  --font-ui: 'Montserrat', system-ui, sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --radius: 16px;
+  --shadow: 0 10px 30px rgba(1, 64, 79, 0.18);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  color: var(--teal);
+  background: var(--cream);
+}
+.serif { font-family: var(--font-serif); font-style: italic; }
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  gap: 1rem;
+}
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  width: min(28rem, 100%);
+}
+a.clean { color: var(--teal); text-decoration: none; font-weight: 700; }
+a.clean:hover { text-decoration: none; opacity: 0.8; }
