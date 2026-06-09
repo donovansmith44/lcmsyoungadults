@@ -52,7 +52,7 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
           <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
             {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id))}>Reveal now</Button>}
             <Button onClick={() => runAdmin(recomputeSessionGroups(db, s.id))}>Recompute</Button>
-            {s.status === 'active' && <Button onClick={() => runAdmin(endSession(db, s.id))}>End</Button>}
+            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id).then(() => endSession(db, s.id)))}>End</Button>}
             {s.status === 'ended' && <Button onClick={() => runAdmin(archiveSession(db, s.id))}>Archive</Button>}
             <Button onClick={() => setToDelete(s)} style={{ background: '#a3322b' }}>Delete</Button>
           </div>

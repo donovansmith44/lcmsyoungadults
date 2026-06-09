@@ -8,6 +8,7 @@ import { upsertTaker, recordAnswer, setSharing } from '../data/takers'
 import { submitTest } from '../data/submit'
 import { freezeSessionGroups } from '../data/freeze'
 import { useActiveSession } from '../hooks/useActiveSession'
+import { useSession } from '../hooks/useSession'
 import { useTaker } from '../hooks/useTaker'
 import { useSharedList } from '../hooks/useSharedList'
 import { useNow } from '../hooks/useNow'
@@ -35,6 +36,9 @@ export function TestApp() {
   const [sharedChoiceMade, setSharedChoiceMade] = useState(false)
   const { session } = useActiveSession()
   const { taker, loading: takerLoading } = useTaker(username)
+  // The session the taker actually belongs to (may differ from the active one once
+  // they've finished and the admin has moved on / ended it).
+  const takerSession = useSession(taker?.sessionId ?? null)
   const now = useNow(1000)
 
   useEffect(() => { ensureAnonymous() }, [])
@@ -139,6 +143,16 @@ export function TestApp() {
     }
   }, [phase, t, session?.status, taker, timeoutPrompted])
 
+  // Result countdown/reveal is driven by the TAKER'S session, not whatever is active
+  // now. It's revealed (T=0 → show the group) once that session is frozen, ended,
+  // deleted, or its timer has elapsed.
+  const takerSessionT = takerSession ? computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now) : 0
+  const resultRevealed = !takerSession
+    || takerSession.status !== 'active'
+    || takerSession.groupsFrozenAt != null
+    || takerSessionT === 0
+  const resultT = resultRevealed ? 0 : takerSessionT
+
   const entries = useSharedList(taker?.sessionId ?? null)
 
   if (phase === 'landing' || !username) return <Landing onBegin={onBegin} />
@@ -186,7 +200,7 @@ export function TestApp() {
       <Result
         username={taker.username}
         type={taker.type ?? ''}
-        t={t}
+        t={resultT}
         group={taker.group}
         sharing={taker.sharing}
         entries={entries}

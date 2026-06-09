@@ -15,6 +15,7 @@ vi.mock('../hooks/useSharedList', () => ({ useSharedList: () => [] }))
 vi.mock('../hooks/useNow', () => ({ useNow: () => 9_999_999_999 })) // far future -> timer expired
 // mutable hook state (vitest allows mock factories to close over `mock*`-prefixed vars)
 vi.mock('../hooks/useActiveSession', () => ({ useActiveSession: () => ({ session: mockSession, loading: false }) }))
+vi.mock('../hooks/useSession', () => ({ useSession: () => null }))
 vi.mock('../hooks/useTaker', () => ({ useTaker: () => mockTaker }))
 
 let mockSession: unknown
