@@ -4,7 +4,7 @@ export function SharingPrompt({ onChoose }: { onChoose: (share: boolean) => void
   return (
     <div className="screen">
       <div className="screen-center">
-        <p className="serif" style={{ fontSize: '1.5rem', lineHeight: 1.35, maxWidth: '22ch' }}>
+        <p style={{ fontSize: '1.4rem', fontWeight: 600, lineHeight: 1.4, maxWidth: '24ch' }}>
           Share your result with others in this session who've also shared theirs?
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.7rem', width: '100%', marginTop: '1rem' }}>
