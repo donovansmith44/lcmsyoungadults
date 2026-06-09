@@ -6,7 +6,41 @@ fixed** (verify), and **dev/env notes** so work can resume cold. App lives in th
 
 ---
 
-## OPEN BUGS (need fixing)
+## ✅ RESOLVED — 2026-06-08 round 2 (branch `feat/session-correctness-and-ui-testing`, TDD)
+
+All round-2 reports below are **fixed and covered by automated tests** (unit + component +
+emulator rules + Playwright E2E). Spec: `docs/superpowers/specs/2026-06-08-session-correctness-and-automated-ui-testing-design.md`;
+plan: `docs/superpowers/plans/2026-06-08-session-correctness-and-automated-ui-testing.md`.
+
+| Report | Fix | Proven by |
+|--------|-----|-----------|
+| #4 no "start over" from result | "Start over" → landing (`Result`/`TestApp`) | component + E2E **E3** |
+| #5 retake | dropped (per decision); redo = new unique alias via start-over | E2E **E3** |
+| usernames unique / browser-bound (#6) | `ownerUid` + create-once/owner-write rules; claim refused for a different browser | rules tests + E2E **E4** |
+| #6 cross-device inheritance | identity = anonymous uid; same alias on a 2nd browser refused, no shared history | E2E **E4** |
+| session binding correctness (#3) | session captured at **begin** (one-shot `getActiveSession` after auth), immutable; pre-session takers stay private | data tests + E2E **E5/E6** |
+| non-finishers get group | reveal banner driven by taker's own session | E2E **E7** |
+| taker session name + lockstep countdown | `Question` header from taker session via shared `computeT`/`startedAt` | component + E2E **E8** |
+| admin time remaining | `SessionList` "N min left" | component + E2E **E8** |
+| #7 admin writes do nothing | resolved by deterministic admin identity (sign out anon before Google popup); confirmed under real rules | E2E **E9/E10** |
+| admin roster minimize/close | collapsible panel | component + E2E **E11** |
+| admin group-override placement | labeled per-row buttons; pass doc id (`r.id`) | component + E2E **E12** |
+| #8 mobile question unreadable | explicit brand teal `.q-text` + font fallback | E2E **E13** (computed color + 11.4:1 contrast) |
+| #2 premature reveal (regression) | client never freezes; reveal on expiry/admin only | E2E **E14** |
+
+**Tests (green):** 110 vitest (unit/component/emulator) + 14 Playwright E2E (desktop) + 1 mobile.
+`tsc` clean; `npm run build` OK. Lint: 8 **pre-existing** errors only (subscription-hook
+`set-state-in-effect` ×7 + one `freeze.test` `any`); this work added none.
+
+**Run E2E:** emulators must be up, then `npm run test:e2e` (or `test:e2e:ci` which self-starts
+them). Admin E2E drives the Auth-emulator Google popup via `signInAdmin` in `e2e/helpers/flows.ts`.
+
+**Still pending:** production deploy (Donovan-only). Global username uniqueness is forever
+unless `takers` is cleared between events (accepted trade-off — see spec §6).
+
+---
+
+## OPEN BUGS (historical round-2 detail — all now RESOLVED above)
 
 ### NEW REPORTS — 2026-06-08 (round 2, from on-device testing)
 
@@ -78,9 +112,10 @@ fixed** (verify), and **dev/env notes** so work can resume cold. App lives in th
 
 ## FIXED 2026-06-08 (TDD; tests in repo — verify)
 
-### 1. Admin writes silently fail — fix shipped, **DISPUTED** (see open #7)
-> ⚠ Still reported failing on-device after this fix (open bug #7). Unverified live — do not
-> assume resolved until confirmed against `firestore-debug.log`.
+### 1. Admin writes silently fail — **RESOLVED & verified** (see RESOLVED round 2, #7)
+> ✅ Confirmed under real Firestore rules by Playwright E2E (E9/E10): an allowlisted admin's
+> Reveal/End/Recompute/override all succeed; no error banner. The deterministic-identity fix
+> (sign out the anonymous session before the Google popup) was sufficient.
 - **Root cause:** the browser shares one Firebase Auth between the anonymous taker flow and
   the Google admin sign-in; admin clicks could execute as the email-less anonymous user.
 - **Fix:** (a) `signInWithGoogle` now signs out an existing **anonymous** session before the
