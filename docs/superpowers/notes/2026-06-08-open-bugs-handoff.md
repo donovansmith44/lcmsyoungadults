@@ -8,44 +8,101 @@ fixed** (verify), and **dev/env notes** so work can resume cold. App lives in th
 
 ## OPEN BUGS (need fixing)
 
-### 1. Admin writes (Reveal now / Recompute / End / Start / Delete) silently fail
-- **Symptom:** clicking admin-page action buttons "does nothing."
-- **Evidence:** `web/firestore-debug.log` shows `PERMISSION_DENIED` with
-  *"Property email is undefined"* (rules line 9) — i.e. the write reaches Firestore as an
-  **anonymous identity with no `email` claim**, so `isAdmin()` denies it. (≈9 denials logged.)
-- **Why:** the same browser runs BOTH the anonymous taker flow (`ensureAnonymous()` in
-  `TestApp`) and the Google admin sign-in. On one origin they share a single Firebase Auth,
-  so admin clicks can execute as the anonymous user.
-- **Already shipped (partial):** error banner on failures + signed-in identity shown in the
-  admin header (`AdminPage`), "Sign in with Google" offered from any guest/non-admin state
-  (`AdminGate`), and an email-safe `isAdmin()` rule (`firestore.rules`). When the admin IS
-  genuinely Google-authed, writes succeed (a session did get frozen — see bug #2).
-- **To fix:** make the admin identity deterministic. Options: on `/admin` require an explicit
-  Google sign-in that REPLACES any anonymous session (sign out anonymous first); don't call
-  `ensureAnonymous()` until a taker actually starts a test (reduce clobbering); and make the
-  error banner unmissable. Verify post-sign-in writes carry `email` via `firestore-debug.log`.
+### NEW REPORTS — 2026-06-08 (round 2, from on-device testing)
 
-### 2. Result reveals the group immediately instead of counting down
-- **Symptom:** set timer to 30 min, finish the test → result jumps straight to the group
-  instead of "Check back in 30 minutes."
-- **Evidence:** session `9dq4WOnswATZ2F9IKZWe` (timer 30, started 00:52:30Z) had
-  `groupsFrozenAt` set at **00:53:02Z — ~32s later**. The result reveal condition in
-  `TestApp` includes `takerSession.groupsFrozenAt != null`, so it reveals.
-- **Root-cause candidates:**
-  - (a) The admin "Reveal now" actually SUCCEEDED and froze the session (reveal is then
-    technically correct but unintended). Tension with bug #1 — would mean the admin was
-    authed at that click. Check whether the freeze came from the admin.
-  - (b) The client **freeze-fallback** effect in `TestApp` mis-fired: it calls
-    `freezeSessionGroups` when the active session's `computeT(...) === 0`. Investigate
-    `sessionStartMs()` against a REAL Firestore `serverTimestamp` and browser-vs-emulator
-    clock skew — a transient `t === 0` would auto-freeze a fresh 30-min session.
-- **To fix:** determine the freeze source. Strongly consider REMOVING the client-side
-  freeze-fallback entirely (let timer expiry + admin reveal drive it, ideally server-side),
-  or hard-guard it. Confirm a fresh 30-min session shows a 30-min countdown end-to-end.
+#### 4. No "start over / back to landing" from the results page
+- **Symptom:** from the test **results** page there's no way to return to the landing page,
+  so you can't redo a test under a different alias.
+- **Where:** `routes/Result.tsx` has no exit control. `routes/TestApp.tsx` already has a
+  `goLanding()` (clears `lya.personality.username` + resets state) wired to the **Question**
+  screen's `onExit` ("↺ Start over"), but it is **not** passed to `Result`. Also the
+  `taker?.completed && phase === 'test' → result` effect forces a completed taker back to the
+  result screen.
+- **Fix direction:** add a "Start over / New test" action on `Result` that calls
+  `goLanding()`; make sure the completed-resume effect doesn't immediately bounce back to the
+  result after leaving.
+
+#### 5. Can't retake a test
+- **Symptom:** once a taker has completed, there's no way to retake.
+- **Where:** a completed taker always resumes to `result`; answers persist in
+  `/takers/{username}`, so re-entering the same alias just reopens the old result.
+- **Fix direction (product decision):** a "Retake" action that either resets the same taker
+  doc (clear `answers`/`completed`/`type`/`group`/scores) or starts a fresh attempt. Decide
+  how it interacts with aliases, sessions, and identity (#6) and the orphan/binding rules (#3).
+
+#### 6. History is inherited across devices — sessions should be BROWSER-bound
+- **Symptom:** opening the app on the desktop browser inherits the **phone's** test history.
+- **Root cause:** taker identity is the **username** — docs live at `/takers/{username}` under
+  the "username-only trust model" (`firestore.rules`). Any device that enters the same alias
+  reads the same doc → shared history. `localStorage` only remembers the alias per browser; it
+  does **not** isolate identity. So this is alias collision, not a sync bug.
+- **Fix direction:** make identity **browser-bound** — derive a per-browser id (random local
+  id, or the anonymous-auth `uid`) and key takers by it (or namespace the display name under
+  it) so a new browser starts fresh even with the same display name. Touches `data/takers.ts`,
+  `TestApp`, `firestore.rules`, the roster, and grouping. Significant — needs design first.
+
+#### 7. Admin actions (Reveal now / Recompute / End / Delete) still do nothing
+- **Symptom:** the admin action buttons have **no effect** on either in-progress (active) or
+  ended sessions.
+- **Relation:** this is open bug **#1** (admin-write auth). A working-tree fix shipped
+  (deterministic admin identity — see FIXED #1 below) but is **unverified live / not deployed**,
+  and the failure is still observed. Treat #1 as **NOT yet confirmed fixed**.
+- **Investigate live:** confirm the signed-in identity carries `email` (admin header shows it;
+  grep `firestore-debug.log` for `PERMISSION_DENIED` / "Property email is undefined"); confirm
+  the error banner surfaces (`runAdmin` → `reportAdminError` → `AdminPage`); confirm the
+  button `onClick` actually fires; confirm the Google sign-in **replaced** the anonymous
+  session. If writes still go as anonymous, extend the fix (e.g., force a reload/re-auth after
+  Google sign-in so `auth.currentUser` is unambiguous before any admin write).
+
+#### 8. Mobile question font is unreadable — use the agreed blue text
+- **Symptom:** on mobile the **question** text is unreadable. It should use the agreed
+  blueish text from the brand color schema.
+- **Where:** `routes/Question.tsx` `<h2>` has **no explicit `color`** (it inherits the body
+  `color: var(--teal)`) and renders Montserrat at weight 600 via the **variable** font.
+  `theme.css` palette: `--teal: #01404f` is the agreed blue.
+- **Candidate causes:** low contrast against the pink→cream gradient on small screens; the
+  variable font (`truetype-variations`) weight not applying on some mobile browsers (text
+  renders too thin/heavy/wrong); or an inherited color being overridden.
+- **Fix direction:** set the question text explicitly to `var(--teal)` with a mobile-legible
+  weight/size, and verify the variable font loads on-device (or ship a static-weight
+  fallback). Confirm on a real phone.
 
 ### 3. (Minor) Orphaned/incomplete takers
 - `juan` taker: `completed=false`, `sessionId=null` — a started-but-unbound taker. Not
-  harmful; note for roster/cleanup semantics.
+  harmful; note for roster/cleanup semantics. (sessionId binds only at `submitTest`, so any
+  in-progress/off-session taker is sessionId-less and never appears in a session roster.)
+- **Not a behavioral defect** — left open pending a product decision: bind `sessionId` at
+  start vs. submit, hide/label orphans in the roster, or a cleanup tool. No fix shipped.
+
+---
+
+## FIXED 2026-06-08 (TDD; tests in repo — verify)
+
+### 1. Admin writes silently fail — fix shipped, **DISPUTED** (see open #7)
+> ⚠ Still reported failing on-device after this fix (open bug #7). Unverified live — do not
+> assume resolved until confirmed against `firestore-debug.log`.
+- **Root cause:** the browser shares one Firebase Auth between the anonymous taker flow and
+  the Google admin sign-in; admin clicks could execute as the email-less anonymous user.
+- **Fix:** (a) `signInWithGoogle` now signs out an existing **anonymous** session before the
+  Google popup, so the admin identity replaces it cleanly (`auth/adminAuth.ts`;
+  `auth/adminAuth.test.ts`). (b) `TestApp` no longer signs in anonymously on bare page load —
+  `ensureAnonymous()` runs only inside the taker flow (when a username is entered/restored),
+  and is awaited *before* the first taker-doc write (`routes/TestApp.tsx`; tests in
+  `routes/TestApp.test.tsx`). This stops the stray anonymous identity that clobbered admin.
+- **Verify:** sign in on `/admin`, click Reveal/End/Recompute; confirm writes carry `email`
+  in `firestore-debug.log` (no more "Property email is undefined").
+
+### 2. Premature group reveal — FIXED (client no longer freezes)
+- **Root cause:** the client-side **freeze-fallback** in `TestApp` wrote `groupsFrozenAt`
+  off the browser's local clock. Freezing is a sessions write (admin-only by the rules), so
+  it only ever "succeeded" when the taker's browser was sharing the admin's Google auth
+  (bug #1) — and then froze fresh sessions ~30s in (clock skew), revealing groups early.
+- **Fix:** removed the client-side freeze-fallback entirely. Freezing is now owned solely by
+  the admin "Reveal now"/"End" actions; the taker's reveal logic is read-only (timer expiry
+  / admin reveal). Regression test: the client never calls `freezeSessionGroups` even when
+  its local timer reads 0 (`routes/TestApp.test.tsx`).
+- **Verify:** with the admin-auth fix in place, a fresh 30-min session shows a 30-min
+  countdown end-to-end and only reveals on timer expiry or admin reveal.
 
 ---
 
