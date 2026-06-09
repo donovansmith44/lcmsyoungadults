@@ -7,8 +7,18 @@ export function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase()
 }
 
+export class UsernameTakenError extends Error {
+  constructor(public readonly username: string) {
+    super(`The name "${username}" is already taken`)
+    this.name = 'UsernameTakenError'
+  }
+}
+
+export interface BeginTakerArgs { ownerUid: string; sessionId: string | null }
+
 export interface TakerDoc {
   username: string
+  ownerUid: string
   answers: Record<string, AnswerValue>
   completed: boolean
   type: string | null
@@ -24,13 +34,17 @@ export interface TakerDoc {
 const takerRef = (db: Firestore, username: string) =>
   doc(db, 'takers', normalizeUsername(username))
 
-/** Creates the taker if absent; never overwrites an existing record. */
-export async function upsertTaker(db: Firestore, username: string): Promise<void> {
+/** Claims a username for this browser. Resumes if already owned; throws if owned elsewhere. */
+export async function upsertTaker(db: Firestore, username: string, args: BeginTakerArgs): Promise<void> {
   const ref = takerRef(db, username)
   const snap = await getDoc(ref)
-  if (snap.exists()) return
+  if (snap.exists()) {
+    if (snap.data().ownerUid !== args.ownerUid) throw new UsernameTakenError(username)
+    return // same browser re-claiming -> resume; joined session stays immutable
+  }
   await setDoc(ref, {
     username: username.trim(),
+    ownerUid: args.ownerUid,
     answers: {},
     completed: false,
     type: null,
@@ -38,7 +52,7 @@ export async function upsertTaker(db: Firestore, username: string): Promise<void
     seRank: null,
     seStrength: null,
     sharing: false,
-    sessionId: null,
+    sessionId: args.sessionId,
     group: null,
     groupOverride: false,
     createdAt: serverTimestamp(),
