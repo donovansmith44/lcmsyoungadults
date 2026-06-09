@@ -3,7 +3,7 @@ import { db } from '../firebase'
 import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
 import { OEJTS_ITEMS } from '../domain/oejts'
-import { computeT } from '../domain/timer'
+import { computeT, startedAtMs } from '../domain/timer'
 import { upsertTaker, recordAnswer, setSharing, UsernameTakenError } from '../data/takers'
 import { submitTest } from '../data/submit'
 import { useActiveSession } from '../hooks/useActiveSession'
@@ -228,9 +228,7 @@ export function TestApp() {
   return null
 }
 
-/** Firestore Timestamp -> ms. */
+/** Firestore Timestamp -> ms (shared normalizer; falls back to wall-clock now). */
 function sessionStartMs(session: SessionDoc): number {
-  const s = session.startedAt as unknown as { toMillis?: () => number } | number | null
-  if (s && typeof s === 'object' && 'toMillis' in s && s.toMillis) return s.toMillis()
-  return typeof s === 'number' ? s : Date.now()
+  return startedAtMs(session.startedAt, Date.now())
 }

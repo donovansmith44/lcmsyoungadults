@@ -8,7 +8,7 @@ import { DeleteConfirm } from './DeleteConfirm'
 import { useIsAdmin } from '../../hooks/useIsAdmin'
 import { runAdmin } from './adminError'
 import { useNow } from '../../hooks/useNow'
-import { computeT } from '../../domain/timer'
+import { computeT, startedAtMs } from '../../domain/timer'
 import type { SessionDoc } from '../../data/sessions'
 
 interface Props {
@@ -25,11 +25,7 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
   const [toDelete, setToDelete] = useState<SessionDoc | null>(null)
   const hasActive = sessions.some((s) => s.status === 'active')
   const now = useNow(1000)
-  const startMs = (s: SessionDoc) => {
-    const v = s.startedAt as unknown as { toMillis?: () => number } | number | null
-    if (v && typeof v === 'object' && 'toMillis' in v && v.toMillis) return v.toMillis()
-    return typeof v === 'number' ? v : now
-  }
+  const startMs = (s: SessionDoc) => startedAtMs(s.startedAt, now)
 
   const start = () => {
     if (onStartOverride) return onStartOverride(name.trim(), Number(timer))
