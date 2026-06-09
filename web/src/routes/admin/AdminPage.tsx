@@ -46,7 +46,7 @@ function AdminConsole() {
       {selectedId && (
         <div className="card" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>Roster</h3>
+            <h3 style={{ margin: 0 }}>Roster ({rows.length})</h3>
             <div style={{ display: 'flex', gap: '.4rem' }}>
               <button onClick={() => setRosterMin((m) => !m)}
                 aria-label={rosterMin ? 'expand roster' : 'minimize roster'}
