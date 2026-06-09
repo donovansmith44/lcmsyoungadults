@@ -46,6 +46,27 @@ Captured from live review of the Plan-2 test-taker UI. Items are grouped as **bu
    cream `#fff8f2`, Montserrat (display/body) + Cormorant Garamond (italic accents),
    church logo. Brochure fonts/logo now vendored at `web/public/brand/`.
 
+## Resolved (2026-06-08, later same day)
+
+- **Bug 1 (refresh) — fixed.** username persists in `localStorage`; refresh resumes.
+- **Result type big/teal, copy size, single "Read more about {TYPE}" link — done.**
+- **Question screen — redesigned** as 16P-style lean-bar questions ("Are you more X or Y?").
+- **Auto-advance + Back — done; plus a "↺ Start over" control** returns to the landing.
+- **Share-prompt italics — removed.**
+- **Admin buttons did nothing — fixed.** Root cause: writes hit Firestore as an
+  *anonymous* identity (no email claim) → rules correctly denied, but failures were
+  swallowed. Now: errors surface in a banner, the page shows the signed-in identity,
+  the gate routes guests to a Google sign-in, and `isAdmin()` is email-safe (no throw).
+- **Stuck "Loading…" after ending a session / new tab — fixed.** `useTaker` now reports
+  loading vs missing; a missing taker doc shows a "Start a new test" escape instead of
+  hanging; `onBegin` creates the doc before subscribing (no flash).
+- **Run-out-of-time behavior — decided + built:** "prompt to share, keep going." At the
+  buzzer the share opt-in appears once; the choice is recorded; the taker keeps answering
+  for their full type; the completion prompt is skipped if already chosen.
+- **Tests added:** `data/multiUser.test.ts` (many takers → own types + sharing
+  visibility, opt-outs hidden) and `routes/TestApp.test.tsx` (buzzer share-prompt flow +
+  missing-taker escape).
+
 ## Environment notes (not app bugs)
 
 - Phone access over LAN is blocked by Windows Firewall (Wi-Fi profile = Public, no
