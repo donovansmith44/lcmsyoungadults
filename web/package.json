@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "emulators": "firebase emulators:start --only firestore,auth --project demo-lya",
-    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-lya \"vitest run src/data\""
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-lya \"vitest run src/data\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "firebase emulators:exec --only firestore,auth --project demo-lya \"playwright test\""
   },
   "dependencies": {
     "firebase": "^12.14.0",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.12.3",
