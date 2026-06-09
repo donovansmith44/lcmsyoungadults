@@ -4,8 +4,9 @@ import {
 import { freezeGroups } from '../domain/grouping'
 import type { Group, TakerForGrouping } from '../domain/types'
 
-export async function setTakerGroupOverride(db: Firestore, username: string, group: Group): Promise<void> {
-  await updateDoc(doc(db, 'takers', username), { group, groupOverride: true })
+/** `takerId` is the taker doc id (the normalized username), not the display name. */
+export async function setTakerGroupOverride(db: Firestore, takerId: string, group: Group): Promise<void> {
+  await updateDoc(doc(db, 'takers', takerId), { group, groupOverride: true })
 }
 
 /** Re-runs the split for a session (even if already frozen), honoring overrides. */
