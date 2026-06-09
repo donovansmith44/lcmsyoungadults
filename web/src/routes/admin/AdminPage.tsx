@@ -25,6 +25,7 @@ function AdminConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const rows = useRoster(selectedId)
   const [error, setError] = useState<string | null>(null)
+  const [rosterMin, setRosterMin] = useState(false)
   useEffect(() => onAdminError(setError), [])
 
   return (
@@ -42,7 +43,24 @@ function AdminConsole() {
         </div>
       )}
       <SessionList sessions={sessions} selectedId={selectedId} onSelect={setSelectedId} />
-      {selectedId && <Roster rows={rows} onOverride={(u, g) => runAdmin(setTakerGroupOverride(db, u, g))} />}
+      {selectedId && (
+        <div className="card" style={{ width: '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0 }}>Roster</h3>
+            <div style={{ display: 'flex', gap: '.4rem' }}>
+              <button onClick={() => setRosterMin((m) => !m)}
+                aria-label={rosterMin ? 'expand roster' : 'minimize roster'}
+                style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer' }}>
+                {rosterMin ? '▸' : '▾'}
+              </button>
+              <button onClick={() => { setSelectedId(null); setRosterMin(false) }}
+                aria-label="close roster"
+                style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer' }}>✕</button>
+            </div>
+          </div>
+          {!rosterMin && <Roster rows={rows} onOverride={(u, g) => runAdmin(setTakerGroupOverride(db, u, g))} />}
+        </div>
+      )}
       <ManageAdmins />
     </div>
   )
