@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../ui/Button'
 
-export function Landing({ onBegin }: { onBegin: (username: string) => void }) {
+export function Landing({ onBegin, error }: { onBegin: (username: string) => void; error?: string | null }) {
   const [name, setName] = useState('')
   const submit = () => { const t = name.trim(); if (t) onBegin(t) }
   return (
@@ -18,6 +18,7 @@ export function Landing({ onBegin }: { onBegin: (username: string) => void }) {
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             style={{ width: '100%', fontFamily: 'var(--font-ui)', fontSize: '1rem', color: 'var(--teal)', background: 'var(--cream)', border: '1.5px solid var(--pink-deep)', borderRadius: 14, padding: '.9rem 1rem', marginBottom: '.9rem', textAlign: 'center' }}
           />
+          {error && <p role="alert" style={{ color: 'var(--warm)', margin: '0 0 .6rem', fontSize: '.85rem' }}>{error}</p>}
           <Button onClick={submit} style={{ width: '100%' }}>Begin →</Button>
         </div>
       </div>

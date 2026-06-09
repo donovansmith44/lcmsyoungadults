@@ -8,9 +8,11 @@ export function normalizeUsername(raw: string): string {
 }
 
 export class UsernameTakenError extends Error {
-  constructor(public readonly username: string) {
+  readonly username: string
+  constructor(username: string) {
     super(`The name "${username}" is already taken`)
     this.name = 'UsernameTakenError'
+    this.username = username
   }
 }
 

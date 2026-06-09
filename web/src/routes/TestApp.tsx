@@ -4,7 +4,7 @@ import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
 import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT } from '../domain/timer'
-import { upsertTaker, recordAnswer, setSharing } from '../data/takers'
+import { upsertTaker, recordAnswer, setSharing, UsernameTakenError } from '../data/takers'
 import { submitTest } from '../data/submit'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSession } from '../hooks/useSession'
@@ -33,6 +33,7 @@ export function TestApp() {
   const [resumed, setResumed] = useState(false)
   const [timeoutPrompted, setTimeoutPrompted] = useState(false)
   const [sharedChoiceMade, setSharedChoiceMade] = useState(false)
+  const [beginError, setBeginError] = useState<string | null>(null)
   const { session } = useActiveSession()
   const { taker, loading: takerLoading } = useTaker(username)
   // The session the taker actually belongs to (may differ from the active one once
@@ -60,18 +61,16 @@ export function TestApp() {
   }, [taker, resumed, firstUnanswered])
 
   const onBegin = async (name: string) => {
+    setBeginError(null)
+    const user = await ensureAnonymous()
+    try {
+      await upsertTaker(db, name, { ownerUid: user.uid, sessionId: session?.id ?? null })
+    } catch (e) {
+      if (e instanceof UsernameTakenError) { setBeginError("That name's taken — choose another."); return }
+      throw e
+    }
     try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
-    // Authenticate before the first write — the taker doc write needs a signed-in client.
-    await ensureAnonymous()
-    // Create the doc BEFORE subscribing, so the first snapshot already exists
-    // (no "couldn't find your test" flash).
-    await upsertTaker(db, name)
-    setUsername(name)
-    setIndex(0)
-    setResumed(true)
-    setTimeoutPrompted(false)
-    setSharedChoiceMade(false)
-    setPhase('test')
+    setUsername(name); setIndex(0); setResumed(true); setTimeoutPrompted(false); setSharedChoiceMade(false); setPhase('test')
   }
 
   // Abandon the current attempt and return to the username landing.
@@ -92,7 +91,7 @@ export function TestApp() {
 
   const submitAndShow = async (answers: Answers) => {
     if (!username) return
-    await submitTest(db, username, answers, session?.id ?? null)
+    await submitTest(db, username, answers)
     setPhase('result')
   }
 
@@ -157,7 +156,7 @@ export function TestApp() {
 
   const entries = useSharedList(taker?.sessionId ?? null)
 
-  if (phase === 'landing' || !username) return <Landing onBegin={onBegin} />
+  if (phase === 'landing' || !username) return <Landing onBegin={onBegin} error={beginError} />
 
   if (phase === 'timeout-share') {
     return <SharingPrompt message="Time's up! Want to share your result with others in this session once it's ready?" onChoose={onTimeoutShare} />

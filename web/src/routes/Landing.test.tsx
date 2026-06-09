@@ -13,4 +13,9 @@ describe('Landing', () => {
     fireEvent.click(begin)
     expect(onBegin).toHaveBeenCalledWith('Donovan')
   })
+
+  it('shows a begin error when provided', () => {
+    render(<Landing onBegin={() => {}} error="That name's taken — choose another." />)
+    expect(screen.getByText(/that name's taken/i)).toBeInTheDocument()
+  })
 })

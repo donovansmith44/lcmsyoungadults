@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- module mocks (hoisted) ---
 vi.mock('../firebase', () => ({ db: {}, auth: {} }))
-vi.mock('../auth/takerAuth', () => ({ ensureAnonymous: vi.fn(() => Promise.resolve({})) }))
+vi.mock('../auth/takerAuth', () => ({ ensureAnonymous: vi.fn(() => Promise.resolve({ uid: 'uidA' })) }))
 vi.mock('../data/takers', () => ({
   upsertTaker: vi.fn(() => Promise.resolve()),
   recordAnswer: vi.fn(() => Promise.resolve()),
   setSharing: vi.fn(() => Promise.resolve()),
+  UsernameTakenError: class UsernameTakenError extends Error {},
 }))
 vi.mock('../data/submit', () => ({ submitTest: vi.fn(() => Promise.resolve()) }))
 vi.mock('../data/freeze', () => ({ freezeSessionGroups: vi.fn(() => Promise.resolve()) }))
@@ -24,7 +25,7 @@ let mockTakerSession: unknown = null
 let mockTaker: unknown = null
 
 import { TestApp } from './TestApp'
-import { setSharing, upsertTaker } from '../data/takers'
+import { setSharing, upsertTaker, UsernameTakenError } from '../data/takers'
 import { freezeSessionGroups } from '../data/freeze'
 import { ensureAnonymous } from '../auth/takerAuth'
 
@@ -138,5 +139,23 @@ describe('TestApp', () => {
     mockTaker = { taker: { username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null, seRank: null, seStrength: null, sharing: false, sessionId: null, group: null, groupOverride: false }, loading: false }
     render(<TestApp />)
     await waitFor(() => expect(ensureAnonymous).toHaveBeenCalled())
+  })
+
+  it('passes uid + active session into the begin claim', async () => {
+    mockSession = { id: 'sLive', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
+    render(<TestApp />)
+    fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'Mae' } })
+    fireEvent.click(screen.getByRole('button', { name: /begin/i }))
+    await waitFor(() => expect(upsertTaker).toHaveBeenCalledWith(
+      expect.anything(), 'Mae', { ownerUid: 'uidA', sessionId: 'sLive' }))
+  })
+
+  it('shows the taken-name message and stays on landing when the name is claimed', async () => {
+    ;(upsertTaker as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new UsernameTakenError('Mae'))
+    render(<TestApp />)
+    fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'Mae' } })
+    fireEvent.click(screen.getByRole('button', { name: /begin/i }))
+    expect(await screen.findByText(/taken/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/username/i)).toBeInTheDocument()
   })
 })
