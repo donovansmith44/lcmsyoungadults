@@ -57,6 +57,15 @@ export function TestApp() {
     setPhase('test')
   }
 
+  // Abandon the current attempt and return to the username landing.
+  const goLanding = () => {
+    try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+    setUsername(null)
+    setIndex(0)
+    setResumed(false)
+    setPhase('landing')
+  }
+
   // A completed taker (e.g. refresh after finishing) resumes on the result.
   useEffect(() => {
     if (taker?.completed && phase === 'test') setPhase('result')
@@ -105,6 +114,7 @@ export function TestApp() {
           onAnswer={onAnswer}
           onBack={() => setIndex(Math.max(0, idx - 1))}
           canBack={idx > 0}
+          onExit={goLanding}
         />
       </>
     )

@@ -10,13 +10,20 @@ interface Props {
   onAnswer: (itemId: number, value: AnswerValue) => void
   onBack?: () => void
   canBack?: boolean
+  onExit?: () => void
 }
 
-export function Question({ index, total, item, value, onAnswer, onBack, canBack }: Props) {
+export function Question({ index, total, item, value, onAnswer, onBack, canBack, onExit }: Props) {
   const copy = QUESTION_COPY[item.id]
   const pct = (index / total) * 100
   return (
     <div className="screen">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button
+          onClick={onExit}
+          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--teal)', fontSize: '.72rem', letterSpacing: '.1em', textTransform: 'uppercase', opacity: 0.6, padding: '2px 4px' }}
+        >↺ Start over</button>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingTop: 4 }}>
         <button
           onClick={onBack}
