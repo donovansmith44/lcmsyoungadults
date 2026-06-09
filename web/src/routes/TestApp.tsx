@@ -144,6 +144,11 @@ export function TestApp() {
     }
   }, [phase, t, session?.status, taker, timeoutPrompted])
 
+  const liveSessionName = takerSession?.name ?? null
+  const liveMinutesLeft = takerSession && takerSession.status === 'active'
+    ? computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now)
+    : null
+
   // Result countdown/reveal is driven by the TAKER'S session, not whatever is active
   // now. It's revealed (T=0 → show the group) once that session is frozen, ended,
   // deleted, or its timer has elapsed.
@@ -189,6 +194,8 @@ export function TestApp() {
           onBack={() => setIndex(Math.max(0, idx - 1))}
           canBack={idx > 0}
           onExit={goLanding}
+          sessionName={liveSessionName}
+          minutesLeft={liveMinutesLeft}
         />
       </>
     )

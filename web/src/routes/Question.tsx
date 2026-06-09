@@ -11,13 +11,21 @@ interface Props {
   onBack?: () => void
   canBack?: boolean
   onExit?: () => void
+  sessionName?: string | null
+  minutesLeft?: number | null
 }
 
-export function Question({ index, total, item, value, onAnswer, onBack, canBack, onExit }: Props) {
+export function Question({ index, total, item, value, onAnswer, onBack, canBack, onExit, sessionName, minutesLeft }: Props) {
   const copy = QUESTION_COPY[item.id]
   const pct = (index / total) * 100
   return (
     <div className="screen">
+      {(sessionName || minutesLeft != null) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.72rem', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--teal)', opacity: 0.7, marginBottom: 6 }}>
+          <span>{sessionName}</span>
+          {minutesLeft != null && <span aria-label="time remaining">⏱ {minutesLeft} min left</span>}
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
         <button
           onClick={onExit}

@@ -21,4 +21,17 @@ describe('Question', () => {
     fireEvent.click(screen.getByLabelText('Back'))
     expect(onBack).toHaveBeenCalled()
   })
+
+  it('shows the session name and remaining minutes when in a session', () => {
+    render(<Question index={0} total={32} item={OEJTS_ITEMS[0]} value={undefined}
+      onAnswer={() => {}} sessionName="Friday Night" minutesLeft={12} />)
+    expect(screen.getByText(/friday night/i)).toBeInTheDocument()
+    expect(screen.getByText(/12 min/i)).toBeInTheDocument()
+  })
+
+  it('shows no session chrome when not in a session', () => {
+    render(<Question index={0} total={32} item={OEJTS_ITEMS[0]} value={undefined}
+      onAnswer={() => {}} sessionName={null} minutesLeft={null} />)
+    expect(screen.queryByText(/min left/i)).toBeNull()
+  })
 })
