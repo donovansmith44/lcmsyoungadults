@@ -6,6 +6,7 @@ import { freezeSessionGroups } from '../../data/freeze'
 import { recomputeSessionGroups, deleteSession } from '../../data/adminOps'
 import { DeleteConfirm } from './DeleteConfirm'
 import { useIsAdmin } from '../../hooks/useIsAdmin'
+import { runAdmin } from './adminError'
 import type { SessionDoc } from '../../data/sessions'
 
 interface Props {
@@ -24,7 +25,7 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
 
   const start = () => {
     if (onStartOverride) return onStartOverride(name.trim(), Number(timer))
-    startSession(db, { name: name.trim(), timerMinutes: Number(timer), createdBy: user?.email ?? '' })
+    runAdmin(startSession(db, { name: name.trim(), timerMinutes: Number(timer), createdBy: user?.email ?? '' }))
   }
 
   return (
@@ -49,10 +50,10 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
             </button>
           </div>
           <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
-            {s.status === 'active' && <Button onClick={() => freezeSessionGroups(db, s.id)}>Reveal now</Button>}
-            <Button onClick={() => recomputeSessionGroups(db, s.id)}>Recompute</Button>
-            {s.status === 'active' && <Button onClick={() => endSession(db, s.id)}>End</Button>}
-            {s.status === 'ended' && <Button onClick={() => archiveSession(db, s.id)}>Archive</Button>}
+            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id))}>Reveal now</Button>}
+            <Button onClick={() => runAdmin(recomputeSessionGroups(db, s.id))}>Recompute</Button>
+            {s.status === 'active' && <Button onClick={() => runAdmin(endSession(db, s.id))}>End</Button>}
+            {s.status === 'ended' && <Button onClick={() => runAdmin(archiveSession(db, s.id))}>Archive</Button>}
             <Button onClick={() => setToDelete(s)} style={{ background: '#a3322b' }}>Delete</Button>
           </div>
         </div>
@@ -62,7 +63,7 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
         <DeleteConfirm
           name={toDelete.name}
           onCancel={() => setToDelete(null)}
-          onConfirm={() => { deleteSession(db, toDelete.id); setToDelete(null) }}
+          onConfirm={() => { runAdmin(deleteSession(db, toDelete.id)); setToDelete(null) }}
         />
       )}
     </div>
