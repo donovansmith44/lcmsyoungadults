@@ -79,6 +79,12 @@ body {
 a.clean { color: var(--teal); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 a.clean:hover { opacity: .8; }
 
+.q-text { color: var(--teal); font-weight: 600; }
+/* Static-weight fallback so the variable axis never collapses on some mobile browsers */
+@supports not (font-variation-settings: normal) {
+  .q-text { font-weight: 700; }
+}
+
 /* Utilitarian card, used by the internal /admin screens. */
 .card {
   background: var(--white);

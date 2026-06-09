@@ -34,4 +34,11 @@ describe('Question', () => {
       onAnswer={() => {}} sessionName={null} minutesLeft={null} />)
     expect(screen.queryByText(/min left/i)).toBeNull()
   })
+
+  it('renders the question text in the brand teal class', () => {
+    render(<Question index={0} total={32} item={OEJTS_ITEMS[0]} value={undefined}
+      onAnswer={() => {}} sessionName={null} minutesLeft={null} />)
+    const h = screen.getByRole('heading', { level: 2 })
+    expect(h).toHaveClass('q-text')
+  })
 })

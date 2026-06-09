@@ -44,7 +44,7 @@ export function Question({ index, total, item, value, onAnswer, onBack, canBack,
         <div style={{ fontSize: '.72rem', letterSpacing: '.14em', textTransform: 'uppercase', opacity: 0.6, whiteSpace: 'nowrap' }}>{index + 1} / {total}</div>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '2.2rem' }}>
-        <h2 style={{ fontWeight: 600, fontSize: '1.7rem', lineHeight: 1.28, letterSpacing: '.005em', maxWidth: '19ch', margin: 0 }}>{copy.question}</h2>
+        <h2 className="q-text" style={{ fontWeight: 600, fontSize: '1.7rem', lineHeight: 1.28, letterSpacing: '.005em', maxWidth: '19ch', margin: 0 }}>{copy.question}</h2>
         <LeanBar left={copy.left} right={copy.right} value={value} onChange={(v) => onAnswer(item.id, v)} />
       </div>
     </div>
