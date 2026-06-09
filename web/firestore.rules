@@ -11,9 +11,18 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
     }
 
-    // Takers: username-only trust model — any signed-in client may read/write.
+    // Takers: doc id is the unique (normalized) username. Browser-owned via ownerUid.
     match /takers/{username} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      // create only when absent (id uniqueness) and only claiming your own uid
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+      // the owner may update/delete their own doc; admins may update (group override)
+      allow update: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid || isAdmin())
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
 
     // Sessions: anyone signed-in may read (takers need timer/active state);
