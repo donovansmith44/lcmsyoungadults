@@ -12,15 +12,16 @@ vi.mock('../data/takers', () => ({
 }))
 vi.mock('../data/submit', () => ({ submitTest: vi.fn(() => Promise.resolve()) }))
 vi.mock('../data/freeze', () => ({ freezeSessionGroups: vi.fn(() => Promise.resolve()) }))
+// onBegin reads the active session one-shot (after auth) to capture the joined session.
+vi.mock('../data/sessions', () => ({ getActiveSession: vi.fn(() => Promise.resolve(mockActiveSession)) }))
 vi.mock('../hooks/useSharedList', () => ({ useSharedList: () => [] }))
 // mutable mock state (vitest hoisting allows factories to close over `mock*` vars)
 vi.mock('../hooks/useNow', () => ({ useNow: () => mockNow }))
-vi.mock('../hooks/useActiveSession', () => ({ useActiveSession: () => ({ session: mockSession, loading: false }) }))
 vi.mock('../hooks/useSession', () => ({ useSession: () => mockTakerSession }))
 vi.mock('../hooks/useTaker', () => ({ useTaker: () => mockTaker }))
 
 let mockNow = 9_999_999_999
-let mockSession: unknown = null
+let mockActiveSession: unknown = null
 let mockTakerSession: unknown = null
 let mockTaker: unknown = null
 
@@ -43,14 +44,15 @@ describe('TestApp', () => {
     localStorage.clear()
     vi.clearAllMocks()
     mockNow = 9_999_999_999
-    mockSession = null
+    mockActiveSession = null
     mockTakerSession = null
     mockTaker = { taker: null, loading: false }
   })
 
   it('prompts to share when the timer runs out, then returns to the test', async () => {
     localStorage.setItem('lya.personality.username', 'Mae')
-    mockSession = { id: 's1', status: 'active', timerMinutes: 0, startedAt: 0, groupsFrozenAt: 1 }
+    // The taker's OWN session has run out (timer 0) -> the buzzer should fire.
+    mockTakerSession = { id: 's1', status: 'active', timerMinutes: 0, startedAt: 0, groupsFrozenAt: 1 }
     mockTaker = {
       taker: {
         username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null,
@@ -78,8 +80,6 @@ describe('TestApp', () => {
   it('result countdown follows the TAKER\'s own session, not whatever is active now', async () => {
     localStorage.setItem('lya.personality.username', 'Mae')
     mockNow = 300_000 // 5 minutes since epoch-0 starts
-    // the active session is a DIFFERENT, longer one — it must be ignored
-    mockSession = { id: 'sB', status: 'active', timerMinutes: 99, startedAt: 0, groupsFrozenAt: null }
     // the taker's own session: 15-minute timer started at 0 -> 10 minutes remain
     mockTakerSession = { id: 'sA', status: 'active', timerMinutes: 15, startedAt: 0, groupsFrozenAt: null }
     mockTaker = completedTaker({ sessionId: 'sA' })
@@ -106,8 +106,7 @@ describe('TestApp', () => {
   // fresh sessions early (clock skew / shared admin auth) -> premature group reveal.
   it('never freezes session groups from the client, even when its local timer reads 0', async () => {
     localStorage.setItem('lya.personality.username', 'Mae')
-    mockNow = 9_999_999_999 // far future -> computeT(...) === 0 for the active session
-    mockSession = { id: 's1', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
+    mockNow = 9_999_999_999 // far future -> computeT(...) === 0 for the taker's session
     mockTakerSession = { id: 's1', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
     mockTaker = completedTaker({ sessionId: 's1', group: null })
 
@@ -142,7 +141,7 @@ describe('TestApp', () => {
   })
 
   it('passes uid + active session into the begin claim', async () => {
-    mockSession = { id: 'sLive', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
+    mockActiveSession = { id: 'sLive', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
     render(<TestApp />)
     fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'Mae' } })
     fireEvent.click(screen.getByRole('button', { name: /begin/i }))
@@ -169,9 +168,8 @@ describe('TestApp', () => {
 
   it('shows the group banner to an unfinished participant once their session is frozen', async () => {
     localStorage.setItem('lya.personality.username', 'Mae')
-    mockNow = 1000 // active-session timer is NON-zero, so the old t===0 banner path would NOT fire
+    mockNow = 1000 // timer NON-zero, so only the frozen-reveal path can show the banner
     mockTakerSession = { id: 'sA', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: 123 }
-    mockSession = mockTakerSession
     mockTaker = { taker: { username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null, seRank: null, seStrength: null, sharing: false, sessionId: 'sA', group: 'games', groupOverride: false }, loading: false }
     render(<TestApp />)
     // The banner splits "Games group" across a span; match on its stable test id.

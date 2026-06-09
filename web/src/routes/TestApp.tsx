@@ -6,7 +6,7 @@ import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT, startedAtMs } from '../domain/timer'
 import { upsertTaker, recordAnswer, setSharing, UsernameTakenError } from '../data/takers'
 import { submitTest } from '../data/submit'
-import { useActiveSession } from '../hooks/useActiveSession'
+import { getActiveSession } from '../data/sessions'
 import { useSession } from '../hooks/useSession'
 import { useTaker } from '../hooks/useTaker'
 import { useSharedList } from '../hooks/useSharedList'
@@ -34,7 +34,6 @@ export function TestApp() {
   const [timeoutPrompted, setTimeoutPrompted] = useState(false)
   const [sharedChoiceMade, setSharedChoiceMade] = useState(false)
   const [beginError, setBeginError] = useState<string | null>(null)
-  const { session } = useActiveSession()
   const { taker, loading: takerLoading } = useTaker(username)
   // The session the taker actually belongs to (may differ from the active one once
   // they've finished and the admin has moved on / ended it).
@@ -63,8 +62,12 @@ export function TestApp() {
   const onBegin = async (name: string) => {
     setBeginError(null)
     const user = await ensureAnonymous()
+    // Authoritatively read the active session AFTER auth (the live subscription can't
+    // load before the anonymous sign-in, so we must not rely on its state here). The
+    // session captured here is the one the taker joins, and it is immutable thereafter.
+    const active = await getActiveSession(db)
     try {
-      await upsertTaker(db, name, { ownerUid: user.uid, sessionId: session?.id ?? null })
+      await upsertTaker(db, name, { ownerUid: user.uid, sessionId: active?.id ?? null })
     } catch (e) {
       if (e instanceof UsernameTakenError) { setBeginError("That name's taken — choose another."); return }
       throw e
@@ -128,44 +131,33 @@ export function TestApp() {
     setPhase('test')
   }
 
-  const startMs = session ? sessionStartMs(session) : 0
-  const t = session ? computeT(startMs, session.timerMinutes, now) : 0
+  // Everything time-related is driven by the TAKER'S OWN session (subscribed once their
+  // sessionId is known), never a globally-active session — the active-session listener
+  // can't even load before anonymous auth, and the taker's reveal must follow the session
+  // they actually joined. NOTE: the client must NOT write the frozen-groups flag; freezing
+  // is an admin-only sessions write owned by "Reveal now"/"End".
+  const takerActive = takerSession?.status === 'active'
+  const takerSessionT = takerSession ? computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now) : 0
+  const t = takerActive ? takerSessionT : 0 // taker's own remaining minutes (drives the buzzer)
 
-  // NOTE: the client must NOT write the frozen-groups flag. Freezing is a sessions write
-  // (admin-only) and is owned by the admin "Reveal now"/"End" actions. A client doing it
-  // off its own clock froze fresh sessions early (clock skew / shared admin auth),
-  // revealing groups prematurely. Reveal here is read-only (timer expiry / admin reveal).
-
-  // When time runs out mid-test, prompt the sharing choice once, then continue.
+  // When the taker's own time runs out mid-test, prompt the sharing choice once, then continue.
   useEffect(() => {
-    if (phase === 'test' && t === 0 && session?.status === 'active' && taker && !taker.completed && !timeoutPrompted) {
+    if (phase === 'test' && t === 0 && takerActive && taker && !taker.completed && !timeoutPrompted) {
       setTimeoutPrompted(true)
       setPhase('timeout-share')
     }
-  }, [phase, t, session?.status, taker, timeoutPrompted])
+  }, [phase, t, takerActive, taker, timeoutPrompted])
 
   const liveSessionName = takerSession?.name ?? null
-  const liveMinutesLeft = takerSession && takerSession.status === 'active'
-    ? computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now)
-    : null
+  const liveMinutesLeft = takerActive ? takerSessionT : null
 
-  // Result countdown/reveal is driven by the TAKER'S session, not whatever is active
-  // now. It's revealed (T=0 → show the group) once that session is frozen, ended,
-  // deleted, or its timer has elapsed.
-  const takerSessionT = takerSession ? computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now) : 0
-  const resultRevealed = !takerSession
-    || takerSession.status !== 'active'
-    || takerSession.groupsFrozenAt != null
-    || takerSessionT === 0
+  // Result reveals the group once the taker's session is frozen, ended, deleted, or its
+  // timer has elapsed.
+  const resultRevealed = !takerSession || !takerActive || takerSession.groupsFrozenAt != null || takerSessionT === 0
   const resultT = resultRevealed ? 0 : takerSessionT
 
-  // Drive the question-screen reveal banner off the taker's OWN session, not the
-  // active session's timer. Covers: session ended/deleted, admin frozen reveal, or
-  // the taker's own timer elapsed — including unfinished participants.
-  const takerRevealed = !!takerSession
-    && (takerSession.status !== 'active' || takerSession.groupsFrozenAt != null
-        || (takerSession.status === 'active'
-            && computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now) === 0))
+  // Question-screen reveal banner, off the taker's own session (covers unfinished participants).
+  const takerRevealed = !!takerSession && (!takerActive || takerSession.groupsFrozenAt != null || takerSessionT === 0)
 
   const entries = useSharedList(taker?.sessionId ?? null)
 
