@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // --- module mocks (hoisted) ---
 vi.mock('../firebase', () => ({ db: {}, auth: {} }))
-vi.mock('../auth/takerAuth', () => ({ ensureAnonymous: () => Promise.resolve({}) }))
+vi.mock('../auth/takerAuth', () => ({ ensureAnonymous: vi.fn(() => Promise.resolve({})) }))
 vi.mock('../data/takers', () => ({
   upsertTaker: vi.fn(() => Promise.resolve()),
   recordAnswer: vi.fn(() => Promise.resolve()),
@@ -24,7 +24,9 @@ let mockTakerSession: unknown = null
 let mockTaker: unknown = null
 
 import { TestApp } from './TestApp'
-import { setSharing } from '../data/takers'
+import { setSharing, upsertTaker } from '../data/takers'
+import { freezeSessionGroups } from '../data/freeze'
+import { ensureAnonymous } from '../auth/takerAuth'
 
 const completedTaker = (overrides: Record<string, unknown> = {}) => ({
   taker: {
@@ -42,7 +44,7 @@ describe('TestApp', () => {
     mockNow = 9_999_999_999
     mockSession = null
     mockTakerSession = null
-    mockTaker = null
+    mockTaker = { taker: null, loading: false }
   })
 
   it('prompts to share when the timer runs out, then returns to the test', async () => {
@@ -96,5 +98,45 @@ describe('TestApp', () => {
     render(<TestApp />)
     expect(await screen.findByText(/you're in the scavenger hunt group!/i)).toBeInTheDocument()
     expect(screen.queryByText(/check back in/i)).toBeNull()
+  })
+
+  // Bug #2: a taker's browser must NEVER write the frozen-groups flag. Freezing is a
+  // sessions write (admin-only by the rules); a client doing it off its own clock froze
+  // fresh sessions early (clock skew / shared admin auth) -> premature group reveal.
+  it('never freezes session groups from the client, even when its local timer reads 0', async () => {
+    localStorage.setItem('lya.personality.username', 'Mae')
+    mockNow = 9_999_999_999 // far future -> computeT(...) === 0 for the active session
+    mockSession = { id: 's1', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
+    mockTakerSession = { id: 's1', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: null }
+    mockTaker = completedTaker({ sessionId: 's1', group: null })
+
+    render(<TestApp />)
+    await waitFor(() => expect(screen.getByText('INTJ')).toBeInTheDocument())
+    expect(freezeSessionGroups).not.toHaveBeenCalled()
+  })
+
+  // Bug #1: don't create an anonymous identity just by loading the page. A stray anonymous
+  // session shares the browser's single Firebase Auth and clobbers the admin sign-in.
+  it('does not sign in anonymously on the landing screen (no taker yet)', async () => {
+    render(<TestApp />)
+    expect(await screen.findByPlaceholderText(/username/i)).toBeInTheDocument()
+    expect(ensureAnonymous).not.toHaveBeenCalled()
+  })
+
+  it('signs in anonymously BEFORE writing the taker doc when a test begins', async () => {
+    render(<TestApp />)
+    fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'Mae' } })
+    fireEvent.click(screen.getByRole('button', { name: /begin/i }))
+    await waitFor(() => expect(upsertTaker).toHaveBeenCalled())
+    expect(ensureAnonymous).toHaveBeenCalled()
+    expect((ensureAnonymous as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0])
+      .toBeLessThan((upsertTaker as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0])
+  })
+
+  it('signs in anonymously when resuming a stored taker on refresh', async () => {
+    localStorage.setItem('lya.personality.username', 'Mae')
+    mockTaker = { taker: { username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null, seRank: null, seStrength: null, sharing: false, sessionId: null, group: null, groupOverride: false }, loading: false }
+    render(<TestApp />)
+    await waitFor(() => expect(ensureAnonymous).toHaveBeenCalled())
   })
 })

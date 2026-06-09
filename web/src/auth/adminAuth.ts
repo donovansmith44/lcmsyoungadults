@@ -4,6 +4,10 @@ import { auth, db } from '../firebase'
 import { isAdminEmail } from '../data/admins'
 
 export async function signInWithGoogle(): Promise<User> {
+  // The browser shares one Firebase Auth between the anonymous taker flow and admin
+  // sign-in. Drop any anonymous session first so the Google identity replaces it cleanly
+  // and admin writes never execute under the email-less anonymous user.
+  if (auth.currentUser?.isAnonymous) await signOut(auth)
   const cred = await signInWithPopup(auth, new GoogleAuthProvider())
   return cred.user
 }

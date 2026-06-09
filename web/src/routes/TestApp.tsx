@@ -6,7 +6,6 @@ import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT } from '../domain/timer'
 import { upsertTaker, recordAnswer, setSharing } from '../data/takers'
 import { submitTest } from '../data/submit'
-import { freezeSessionGroups } from '../data/freeze'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSession } from '../hooks/useSession'
 import { useTaker } from '../hooks/useTaker'
@@ -41,7 +40,10 @@ export function TestApp() {
   const takerSession = useSession(taker?.sessionId ?? null)
   const now = useNow(1000)
 
-  useEffect(() => { ensureAnonymous() }, [])
+  // Only authenticate when we're actually in the taker flow (a name has been entered
+  // or restored). Signing in anonymously on a bare page load creates a stray identity
+  // that shares the browser's single Firebase Auth and clobbers the admin sign-in.
+  useEffect(() => { if (username) ensureAnonymous() }, [username])
 
   const firstUnanswered = useMemo(() => {
     if (!taker) return 0
@@ -59,6 +61,8 @@ export function TestApp() {
 
   const onBegin = async (name: string) => {
     try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
+    // Authenticate before the first write — the taker doc write needs a signed-in client.
+    await ensureAnonymous()
     // Create the doc BEFORE subscribing, so the first snapshot already exists
     // (no "couldn't find your test" flash).
     await upsertTaker(db, name)
@@ -128,12 +132,10 @@ export function TestApp() {
   const startMs = session ? sessionStartMs(session) : 0
   const t = session ? computeT(startMs, session.timerMinutes, now) : 0
 
-  // Freeze fallback when the timer hits 0.
-  useEffect(() => {
-    if (session && !session.groupsFrozenAt && t === 0 && session.status === 'active') {
-      freezeSessionGroups(db, session.id).catch(() => {})
-    }
-  }, [session, t])
+  // NOTE: the client must NOT write the frozen-groups flag. Freezing is a sessions write
+  // (admin-only) and is owned by the admin "Reveal now"/"End" actions. A client doing it
+  // off its own clock froze fresh sessions early (clock skew / shared admin auth),
+  // revealing groups prematurely. Reveal here is read-only (timer expiry / admin reveal).
 
   // When time runs out mid-test, prompt the sharing choice once, then continue.
   useEffect(() => {
