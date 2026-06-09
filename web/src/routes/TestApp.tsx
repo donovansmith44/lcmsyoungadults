@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { db } from '../firebase'
+import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
 import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT } from '../domain/timer'
@@ -23,13 +24,17 @@ function storedUsername(): string | null {
   try { return localStorage.getItem(STORAGE_KEY) } catch { return null }
 }
 
+type Phase = 'landing' | 'test' | 'sharing' | 'timeout-share' | 'result'
+
 export function TestApp() {
   const [username, setUsername] = useState<string | null>(() => storedUsername())
-  const [phase, setPhase] = useState<'landing' | 'test' | 'sharing' | 'result'>(() => (storedUsername() ? 'test' : 'landing'))
+  const [phase, setPhase] = useState<Phase>(() => (storedUsername() ? 'test' : 'landing'))
   const [index, setIndex] = useState(0)
   const [resumed, setResumed] = useState(false)
+  const [timeoutPrompted, setTimeoutPrompted] = useState(false)
+  const [sharedChoiceMade, setSharedChoiceMade] = useState(false)
   const { session } = useActiveSession()
-  const taker = useTaker(username)
+  const { taker, loading: takerLoading } = useTaker(username)
   const now = useNow(1000)
 
   useEffect(() => { ensureAnonymous() }, [])
@@ -50,10 +55,14 @@ export function TestApp() {
 
   const onBegin = async (name: string) => {
     try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
+    // Create the doc BEFORE subscribing, so the first snapshot already exists
+    // (no "couldn't find your test" flash).
+    await upsertTaker(db, name)
     setUsername(name)
     setIndex(0)
     setResumed(true)
-    await upsertTaker(db, name)
+    setTimeoutPrompted(false)
+    setSharedChoiceMade(false)
     setPhase('test')
   }
 
@@ -63,6 +72,8 @@ export function TestApp() {
     setUsername(null)
     setIndex(0)
     setResumed(false)
+    setTimeoutPrompted(false)
+    setSharedChoiceMade(false)
     setPhase('landing')
   }
 
@@ -71,37 +82,85 @@ export function TestApp() {
     if (taker?.completed && phase === 'test') setPhase('result')
   }, [taker?.completed, phase])
 
+  const submitAndShow = async (answers: Answers) => {
+    if (!username) return
+    await submitTest(db, username, answers, session?.id ?? null)
+    setPhase('result')
+  }
+
   const onAnswer = async (itemId: number, value: AnswerValue) => {
     if (!username) return
     await recordAnswer(db, username, itemId, value)
     // brief pause so the selection registers visually, then auto-advance
     setTimeout(() => {
-      if (index + 1 >= OEJTS_ITEMS.length) setPhase('sharing')
-      else setIndex(index + 1)
+      if (index + 1 >= OEJTS_ITEMS.length) {
+        if (sharedChoiceMade) {
+          // Sharing was already chosen at the buzzer — submit straight to the result.
+          const answers = { ...(taker?.answers ?? {}), [itemId]: value } as unknown as Answers
+          void submitAndShow(answers)
+        } else {
+          setPhase('sharing')
+        }
+      } else {
+        setIndex(index + 1)
+      }
     }, 180)
   }
 
+  // Completion share prompt (finished all 32 without having been asked at the buzzer).
   const onChooseShare = async (share: boolean) => {
     if (!username || !taker) return
     await setSharing(db, username, share)
-    await submitTest(db, username, taker.answers as unknown as Answers, session?.id ?? null)
-    setPhase('result')
+    await submitAndShow(taker.answers as unknown as Answers)
+  }
+
+  // Buzzer share prompt (timer expired mid-test): record the choice, then keep going.
+  const onTimeoutShare = async (share: boolean) => {
+    if (username) await setSharing(db, username, share)
+    setSharedChoiceMade(true)
+    setPhase('test')
   }
 
   const startMs = session ? sessionStartMs(session) : 0
   const t = session ? computeT(startMs, session.timerMinutes, now) : 0
+
+  // Freeze fallback when the timer hits 0.
   useEffect(() => {
     if (session && !session.groupsFrozenAt && t === 0 && session.status === 'active') {
       freezeSessionGroups(db, session.id).catch(() => {})
     }
   }, [session, t])
 
+  // When time runs out mid-test, prompt the sharing choice once, then continue.
+  useEffect(() => {
+    if (phase === 'test' && t === 0 && session?.status === 'active' && taker && !taker.completed && !timeoutPrompted) {
+      setTimeoutPrompted(true)
+      setPhase('timeout-share')
+    }
+  }, [phase, t, session?.status, taker, timeoutPrompted])
+
   const entries = useSharedList(taker?.sessionId ?? null)
 
   if (phase === 'landing' || !username) return <Landing onBegin={onBegin} />
 
+  if (phase === 'timeout-share') {
+    return <SharingPrompt message="Time's up! Want to share your result with others in this session once it's ready?" onChoose={onTimeoutShare} />
+  }
+
   if (phase === 'test') {
-    if (!taker) return <div className="screen"><div className="screen-center serif" style={{ opacity: 0.6 }}>Loading…</div></div>
+    if (takerLoading) {
+      return <div className="screen"><div className="screen-center serif" style={{ opacity: 0.6 }}>Loading…</div></div>
+    }
+    if (!taker) {
+      // Stored username with no taker doc (e.g. stale/cleared data) — offer a fresh start
+      // instead of hanging on the loading screen.
+      return (
+        <div className="screen"><div className="screen-center">
+          <p style={{ maxWidth: '26ch' }}>We couldn't find a test in progress for “{username}”.</p>
+          <Button onClick={goLanding} style={{ marginTop: '.4rem' }}>Start a new test</Button>
+        </div></div>
+      )
+    }
     const idx = Math.min(index, OEJTS_ITEMS.length - 1)
     return (
       <>

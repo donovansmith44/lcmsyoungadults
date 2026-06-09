@@ -1,11 +1,16 @@
 import { Button } from '../ui/Button'
 
-export function SharingPrompt({ onChoose }: { onChoose: (share: boolean) => void }) {
+interface Props {
+  onChoose: (share: boolean) => void
+  message?: string
+}
+
+export function SharingPrompt({ onChoose, message }: Props) {
   return (
     <div className="screen">
       <div className="screen-center">
         <p style={{ fontSize: '1.4rem', fontWeight: 600, lineHeight: 1.4, maxWidth: '24ch' }}>
-          Share your result with others in this session who've also shared theirs?
+          {message ?? "Share your result with others in this session who've also shared theirs?"}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.7rem', width: '100%', marginTop: '1rem' }}>
           <Button onClick={() => onChoose(true)} style={{ width: '100%' }}>Yes, share</Button>
