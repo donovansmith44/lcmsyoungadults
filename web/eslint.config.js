@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // e2e/ is Playwright (its own runtime, not React/browser app code — the React-hooks
+  // rules false-positive on Playwright's fixture `use`). Linted via Playwright, not here.
+  globalIgnores(['dist', 'e2e', 'playwright.config.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

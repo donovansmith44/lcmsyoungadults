@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { getTestEnv } from '../../test/emulator'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import type { Firestore } from 'firebase/firestore'
 import { submitTest } from './submit'
 import type { Answers, AnswerValue } from '../domain/types'
 import { OEJTS_ITEMS } from '../domain/oejts'
@@ -9,9 +10,9 @@ import { recordAnswer, upsertTaker } from './takers'
 const answersAll = (v: AnswerValue): Answers =>
   Object.fromEntries(OEJTS_ITEMS.map((i) => [i.id, v])) as Answers
 
-const fullAnswers = () => Object.fromEntries(OEJTS_ITEMS.map((i) => [String(i.id), 3])) as any
-const answerAll = async (db: any, u: string) => {
-  for (const i of OEJTS_ITEMS) await recordAnswer(db, u, i.id, 3 as any)
+const fullAnswers = (): Answers => answersAll(3)
+const answerAll = async (db: Firestore, u: string) => {
+  for (const i of OEJTS_ITEMS) await recordAnswer(db, u, i.id, 3)
 }
 
 describe('submitTest (emulator)', () => {
