@@ -158,4 +158,12 @@ describe('TestApp', () => {
     expect(await screen.findByText(/taken/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/username/i)).toBeInTheDocument()
   })
+
+  it('start over from the result returns to the landing screen', async () => {
+    localStorage.setItem('lya.personality.username', 'Mae')
+    mockTaker = completedTaker({ sessionId: null })
+    render(<TestApp />)
+    fireEvent.click(await screen.findByRole('button', { name: /start over/i }))
+    expect(await screen.findByPlaceholderText(/username/i)).toBeInTheDocument()
+  })
 })

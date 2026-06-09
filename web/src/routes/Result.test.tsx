@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 import { Result } from './Result'
 
 const base = {
   username: 'Donovan', type: 'INTJ', sharing: true,
-  entries: [], onToggleShare: () => {},
+  entries: [], onToggleShare: () => {}, onStartOver: () => {},
 }
 
 describe('Result', () => {
@@ -25,5 +25,12 @@ describe('Result', () => {
   it('reveals the games group when T = 0', () => {
     render(<Result {...base} t={0} group="games" />)
     expect(screen.getByText(/You're in the games group!/)).toBeInTheDocument()
+  })
+
+  it('offers a "start over" control that fires onStartOver', () => {
+    const onStartOver = vi.fn()
+    render(<Result username="Mae" type="INTJ" t={0} group={null} sharing={false} entries={[]} onToggleShare={() => {}} onStartOver={onStartOver} />)
+    fireEvent.click(screen.getByRole('button', { name: /start over/i }))
+    expect(onStartOver).toHaveBeenCalled()
   })
 })

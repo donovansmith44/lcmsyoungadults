@@ -206,6 +206,7 @@ export function TestApp() {
         sharing={taker.sharing}
         entries={entries}
         onToggleShare={(next) => setSharing(db, username, next)}
+        onStartOver={goLanding}
       />
     )
   }

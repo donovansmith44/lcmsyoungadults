@@ -11,9 +11,10 @@ interface Props {
   sharing: boolean
   entries: SharedEntry[]
   onToggleShare: (next: boolean) => void
+  onStartOver: () => void
 }
 
-export function Result({ username, type, t, group, sharing, entries, onToggleShare }: Props) {
+export function Result({ username, type, t, group, sharing, entries, onToggleShare, onStartOver }: Props) {
   return (
     <div className="screen">
       <div className="screen-center">
@@ -31,6 +32,8 @@ export function Result({ username, type, t, group, sharing, entries, onToggleSha
         ) : null}
 
         <a className="clean" href={personalityUrl(type)} target="_blank" rel="noreferrer" style={{ fontSize: '1.05rem' }}>Read more about {type}</a>
+
+        <button onClick={onStartOver} style={{ marginTop: '1.6rem', background: 'none', border: 'none', color: 'var(--teal)', textDecoration: 'underline', cursor: 'pointer', fontSize: '.85rem' }}>↺ Start over</button>
 
         <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.4rem', fontSize: '.9rem', cursor: 'pointer' }}>
           <input type="checkbox" checked={sharing} onChange={(e) => onToggleShare(e.target.checked)} />
