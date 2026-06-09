@@ -12,7 +12,7 @@ function fields(obj: Record<string, unknown>) {
   for (const [k, v] of Object.entries(obj)) {
     if (v === null) f[k] = { nullValue: null }
     else if (typeof v === 'string') f[k] = { stringValue: v }
-    else if (typeof v === 'number') f[k] = { integerValue: String(v) }
+    else if (typeof v === 'number') f[k] = Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v }
     else if (typeof v === 'boolean') f[k] = { booleanValue: v }
     else if (v instanceof Date) f[k] = { timestampValue: v.toISOString() }
   }
@@ -32,5 +32,29 @@ export async function seedSession(id: string, opts: { name: string; timerMinutes
   await seedDoc(`sessions/${id}`, {
     name: opts.name, timerMinutes: opts.timerMinutes, status: opts.status ?? 'active',
     startedAt: opts.startedAt ?? new Date(), groupsFrozenAt: null, createdBy: 'seed',
+  })
+}
+
+/**
+ * Seed a completed taker directly in Firestore, bypassing the browser flow.
+ * Useful when tests need a taker in a session roster without driving the full quiz UI.
+ */
+export async function seedTaker(
+  username: string,
+  sessionId: string,
+  opts: { completed?: boolean; type?: string; seRank?: number; seStrength?: number } = {},
+) {
+  await seedDoc(`takers/${username}`, {
+    username,
+    ownerUid: `seed-uid-${username}`,
+    // answers is a map; omitted here (seedDoc skips objects) — not needed for roster tests
+    completed: opts.completed ?? true,
+    type: opts.type ?? 'INFJ',
+    seRank: opts.seRank ?? 3,
+    seStrength: opts.seStrength ?? 0.5,
+    sharing: false,
+    sessionId,
+    group: null,
+    groupOverride: false,
   })
 }
