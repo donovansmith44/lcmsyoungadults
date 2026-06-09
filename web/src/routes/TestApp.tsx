@@ -159,6 +159,14 @@ export function TestApp() {
     || takerSessionT === 0
   const resultT = resultRevealed ? 0 : takerSessionT
 
+  // Drive the question-screen reveal banner off the taker's OWN session, not the
+  // active session's timer. Covers: session ended/deleted, admin frozen reveal, or
+  // the taker's own timer elapsed — including unfinished participants.
+  const takerRevealed = !!takerSession
+    && (takerSession.status !== 'active' || takerSession.groupsFrozenAt != null
+        || (takerSession.status === 'active'
+            && computeT(sessionStartMs(takerSession), takerSession.timerMinutes, now) === 0))
+
   const entries = useSharedList(taker?.sessionId ?? null)
 
   if (phase === 'landing' || !username) return <Landing onBegin={onBegin} error={beginError} />
@@ -184,7 +192,7 @@ export function TestApp() {
     const idx = Math.min(index, OEJTS_ITEMS.length - 1)
     return (
       <>
-        {taker.group && t === 0 && <RevealBanner group={taker.group} />}
+        {taker.group && takerRevealed && <RevealBanner group={taker.group} />}
         <Question
           index={idx}
           total={OEJTS_ITEMS.length}

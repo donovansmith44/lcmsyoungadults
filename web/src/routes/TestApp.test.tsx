@@ -166,4 +166,19 @@ describe('TestApp', () => {
     fireEvent.click(await screen.findByRole('button', { name: /start over/i }))
     expect(await screen.findByPlaceholderText(/username/i)).toBeInTheDocument()
   })
+
+  it('shows the group banner to an unfinished participant once their session is frozen', async () => {
+    localStorage.setItem('lya.personality.username', 'Mae')
+    mockNow = 1000 // active-session timer is NON-zero, so the old t===0 banner path would NOT fire
+    mockTakerSession = { id: 'sA', status: 'active', timerMinutes: 30, startedAt: 0, groupsFrozenAt: 123 }
+    mockSession = mockTakerSession
+    mockTaker = { taker: { username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null, seRank: null, seStrength: null, sharing: false, sessionId: 'sA', group: 'games', groupOverride: false }, loading: false }
+    render(<TestApp />)
+    // The banner splits "Games group" across a span; use waitFor + container query.
+    await waitFor(() => {
+      const banner = document.querySelector('[style*="position: sticky"]')
+      expect(banner).not.toBeNull()
+      expect(banner!.textContent).toMatch(/games group/i)
+    })
+  })
 })
