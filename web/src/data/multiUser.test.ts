@@ -30,11 +30,11 @@ describe('multi-user session (emulator)', () => {
 
       // every taker doc must exist before submit/sharing updates it
       for (const p of people) {
-        await setDoc(doc(db, 'takers', p.u), { username: p.u, answers: p.a, completed: false, sharing: false })
+        await setDoc(doc(db, 'takers', p.u), { username: p.u, answers: p.a, completed: false, sharing: false, sessionId: 's1' })
       }
       // simulate them all finishing with their own answers, then choosing whether to share
       for (const p of people) {
-        await submitTest(db, p.u, p.a, 's1')
+        await submitTest(db, p.u, p.a)
         await setSharing(db, p.u, p.share)
       }
 

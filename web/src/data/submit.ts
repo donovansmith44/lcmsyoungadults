@@ -18,28 +18,29 @@ async function countGroups(db: Firestore, sessionId: string): Promise<GroupCount
   return counts
 }
 
-/** Completes a taker: binds session, scores, and assigns a latecomer group if frozen. */
-export async function submitTest(
-  db: Firestore, username: string, answers: Answers, activeSessionId: string | null,
-): Promise<void> {
+/** Completes a taker: scores, binds to the taker's OWN session, latecomer group if frozen. */
+export async function submitTest(db: Firestore, username: string, answers: Answers): Promise<void> {
   const result = scoreType(answers)
   if (!result) throw new Error('Test is incomplete')
 
+  const ref = doc(db, 'takers', normalizeUsername(username))
+  const takerSnap = await getDoc(ref)
+  const sessionId = (takerSnap.exists() ? takerSnap.data().sessionId : null) as string | null
+
   let group: Group | null = null
-  if (activeSessionId) {
-    const sessionSnap = await getDoc(doc(db, 'sessions', activeSessionId))
+  if (sessionId) {
+    const sessionSnap = await getDoc(doc(db, 'sessions', sessionId))
     if (sessionSnap.exists() && sessionSnap.data().groupsFrozenAt) {
-      group = assignLatecomer(await countGroups(db, activeSessionId))
+      group = assignLatecomer(await countGroups(db, sessionId))
     }
   }
 
-  await updateDoc(doc(db, 'takers', normalizeUsername(username)), {
+  await updateDoc(ref, {
     completed: true,
     type: result.type,
     axisScores: result.axisScores,
     seRank: seRank(result.type),
     seStrength: seStrength(result.axisScores),
-    sessionId: activeSessionId,
     group,
     completedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
