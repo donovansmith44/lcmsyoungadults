@@ -174,11 +174,8 @@ describe('TestApp', () => {
     mockSession = mockTakerSession
     mockTaker = { taker: { username: 'Mae', answers: { 1: 3 }, completed: false, type: null, axisScores: null, seRank: null, seStrength: null, sharing: false, sessionId: 'sA', group: 'games', groupOverride: false }, loading: false }
     render(<TestApp />)
-    // The banner splits "Games group" across a span; use waitFor + container query.
-    await waitFor(() => {
-      const banner = document.querySelector('[style*="position: sticky"]')
-      expect(banner).not.toBeNull()
-      expect(banner!.textContent).toMatch(/games group/i)
-    })
+    // The banner splits "Games group" across a span; match on its stable test id.
+    const banner = await screen.findByTestId('reveal-banner')
+    expect(banner.textContent).toMatch(/games group/i)
   })
 })
