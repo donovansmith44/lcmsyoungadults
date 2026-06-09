@@ -22,14 +22,26 @@ test('a pre-session taker stays private — not recorded into a later session (E
   // NO active session yet
   const tc = await browser.newContext(); const tp = await tc.newPage()
   await begin(tp, 'early-eli')
-  await seedSession('sLate', { name: 'Late', timerMinutes: 30 })   // session begins mid-test
+  // Wait until early-eli is actually on the test (begin's async bind has resolved with NO
+  // active session) BEFORE the session starts — otherwise we'd race the bind against the seed.
+  await expect(tp.getByText('1 / 32')).toBeVisible()
+  await seedSession('sLate', { name: 'Late', timerMinutes: 30 })   // session begins after they started
   await answerAll(tp); await dismissSharing(tp)
   await expect(tp.getByText(/your answers point to/i)).toBeVisible() // they see their OWN result
   await tc.close()
 
+  // A SECOND taker who began AFTER the session started — genuinely a member of 'Late'.
+  const tc2 = await browser.newContext(); const tp2 = await tc2.newPage()
+  await begin(tp2, 'late-len')
+  await expect(tp2.getByText(/late/i)).toBeVisible()              // bound to 'Late'
+
   await signInAdmin(page, 'admin@x.org')
   await page.getByRole('button', { name: /^late/i }).click()
-  await expect(page.getByText('early-eli')).toHaveCount(0)     // NOT in the late session's roster
+  // Anchor on the genuine member so the roster has definitely loaded its real members
+  // before we assert the pre-session taker is absent (no vacuous toHaveCount(0)).
+  await expect(page.getByText('late-len')).toBeVisible()         // the real member IS present
+  await expect(page.getByText('early-eli')).toHaveCount(0)       // the pre-session taker is NOT
+  await tc2.close()
 })
 
 test('an unfinished participant sees their group after admin reveal (E7, R4)', async ({ page, browser }) => {
