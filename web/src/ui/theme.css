@@ -1,7 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital@0;1&display=swap');
+/* Brochure-faithful design system. Fonts + palette mirror the printed LYA
+   brochure (fonts vendored locally at /public/brand — no CDN dependency). Mobile-first. */
 
-/* Brochure design system — palette mirrors the printed LYA brochure. Mobile-first.
-   Fonts load from Google Fonts (preferred over the locally-vendored cut). */
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url('/brand/fonts/Montserrat-variable.ttf') format('truetype-variations');
+}
+@font-face {
+  font-family: 'Cormorant';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/brand/fonts/CormorantGaramond-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Cormorant';
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url('/brand/fonts/CormorantGaramond-Italic.ttf') format('truetype');
+}
 
 :root {
   --teal: #01404f;
@@ -13,7 +33,7 @@
   --warm: #cc7a63;       /* warm pole accent, drawn from the brochure salmon family */
   --warm-soft: #e3a892;
   --font-ui: 'Montserrat', system-ui, sans-serif;
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-serif: 'Cormorant', Georgia, serif;
   --radius: 16px;
   --shadow: 0 18px 50px rgba(1, 64, 79, 0.18);
 }
