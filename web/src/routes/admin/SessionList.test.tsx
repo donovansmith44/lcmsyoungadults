@@ -9,6 +9,7 @@ vi.mock('../../data/sessions', () => ({
   endSession: vi.fn(() => Promise.resolve()),
   archiveSession: vi.fn(() => Promise.resolve()),
 }))
+vi.mock('../../hooks/useNow', () => ({ useNow: () => 600_000 }))
 
 import { SessionList } from './SessionList'
 import { endSession } from '../../data/sessions'
@@ -30,6 +31,13 @@ describe('SessionList', () => {
     fireEvent.change(screen.getByLabelText(/timer/i), { target: { value: '20' } })
     fireEvent.click(screen.getByRole('button', { name: /start session/i }))
     expect(onStart).toHaveBeenCalledWith('Personality Day', 20)
+  })
+
+  it('shows minutes remaining for an active, started session', () => {
+    const sessions = [{ id: 's1', name: 'Fri', status: 'active', timerMinutes: 15, startedAt: 0, endedAt: null, groupsFrozenAt: null, createdBy: 'a@b.c' }]
+    render(<SessionList sessions={sessions as SessionDoc[]} selectedId={null} onSelect={() => {}} />)
+    // 15-min timer, now=600000ms = 10 min elapsed -> 5 left
+    expect(screen.getByText(/5 min left/i)).toBeInTheDocument()
   })
 
   it('End reveals groups then ends the session (freeze-then-end)', async () => {

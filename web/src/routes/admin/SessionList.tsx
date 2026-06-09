@@ -7,6 +7,8 @@ import { recomputeSessionGroups, deleteSession } from '../../data/adminOps'
 import { DeleteConfirm } from './DeleteConfirm'
 import { useIsAdmin } from '../../hooks/useIsAdmin'
 import { runAdmin } from './adminError'
+import { useNow } from '../../hooks/useNow'
+import { computeT } from '../../domain/timer'
 import type { SessionDoc } from '../../data/sessions'
 
 interface Props {
@@ -22,6 +24,12 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
   const [timer, setTimer] = useState(30)
   const [toDelete, setToDelete] = useState<SessionDoc | null>(null)
   const hasActive = sessions.some((s) => s.status === 'active')
+  const now = useNow(1000)
+  const startMs = (s: SessionDoc) => {
+    const v = s.startedAt as unknown as { toMillis?: () => number } | number | null
+    if (v && typeof v === 'object' && 'toMillis' in v && v.toMillis) return v.toMillis()
+    return typeof v === 'number' ? v : now
+  }
 
   const start = () => {
     if (onStartOverride) return onStartOverride(name.trim(), Number(timer))
@@ -48,6 +56,11 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
             <button onClick={() => onSelect(s.id)} style={{ background: 'none', border: 'none', fontWeight: 700, cursor: 'pointer', color: 'var(--teal)' }}>
               {s.name} <span style={{ fontWeight: 400, opacity: 0.6, fontSize: '.8rem' }}>({s.status})</span>
             </button>
+            {s.status === 'active' && (
+              <span style={{ fontSize: '.75rem', opacity: 0.7, marginLeft: 8 }}>
+                {computeT(startMs(s), s.timerMinutes, now)} min left
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
             {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id))}>Reveal now</Button>}
