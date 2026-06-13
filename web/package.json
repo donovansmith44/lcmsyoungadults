@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "emulators": "firebase emulators:start --only firestore,auth --project demo-lya",
-    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-lya \"vitest run src/data\""
+    "test:rules": "firebase emulators:exec --only firestore,auth --project demo-lya \"vitest run\""
+  },
+  "engines": {
+    "node": "^20 || ^22 || >=24"
   },
   "dependencies": {
     "firebase": "^12.14.0",
