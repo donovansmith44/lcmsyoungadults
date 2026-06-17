@@ -1,5 +1,5 @@
 import {
-  Firestore, doc, getDoc, setDoc, updateDoc, serverTimestamp,
+  Firestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, runTransaction,
 } from 'firebase/firestore'
 import type { AnswerValue, AxisScores, Group } from '../domain/types'
 
@@ -110,4 +110,14 @@ export async function setSharing(db: Firestore, username: string, sharing: boole
 export async function getTaker(db: Firestore, username: string): Promise<TakerDoc | null> {
   const snap = await getDoc(takerRef(db, username))
   return snap.exists() ? (snap.data() as TakerDoc) : null
+}
+
+/** Binds a session-less taker to a session. No-op if already bound (sessions never hop). */
+export async function joinSession(db: Firestore, username: string, sessionId: string): Promise<void> {
+  const ref = takerRef(db, username)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists() || snap.data().sessionId != null) return
+    tx.update(ref, { sessionId, updatedAt: serverTimestamp() })
+  })
 }

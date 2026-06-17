@@ -22,7 +22,8 @@ service cloud.firestore {
       allow update: if signedIn()
         && (resource.data.ownerUid == request.auth.uid || isAdmin())
         && request.resource.data.ownerUid == resource.data.ownerUid
-        && (resource.data.get('sharing', false) != true || request.resource.data.sharing == true);
+        && (resource.data.get('sharing', false) != true || request.resource.data.sharing == true)
+        && (resource.data.get('sessionId', null) == null || request.resource.data.get('sessionId', null) == resource.data.get('sessionId', null));
       allow delete: if signedIn()
         && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }

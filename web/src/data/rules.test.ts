@@ -110,4 +110,19 @@ describe('security rules (emulator)', () => {
     const admin = env.authenticatedContext('a1', { email: 'admin@x.org' }).firestore()
     await assertSucceeds(setDoc(doc(admin, 'meta', 'activeSession'), { sessionId: 'x' }))
   })
+
+  it('a taker may set sessionId from null to a value (join) but not change a set one (hop)', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'takers', 'jna'),
+        { username: 'jna', ownerUid: 'uidA', completed: false, sharing: false, sessionId: null, group: null })
+      await setDoc(doc(ctx.firestore(), 'takers', 'jnb'),
+        { username: 'jnb', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'A', group: null })
+    })
+    const a = env.authenticatedContext('uidA', {}).firestore()
+    await assertSucceeds(setDoc(doc(a, 'takers', 'jna'),
+      { username: 'jna', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'A', group: null }))
+    await assertFails(setDoc(doc(a, 'takers', 'jnb'),
+      { username: 'jnb', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'B', group: null }))
+  })
 })

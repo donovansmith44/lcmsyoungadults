@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { getTestEnv } from '../../test/emulator'
 import { getDoc, doc } from 'firebase/firestore'
-import { upsertTaker, recordAnswer, completeTaker, normalizeUsername, UsernameTakenError, setSharing, getTaker } from './takers'
+import { upsertTaker, recordAnswer, completeTaker, normalizeUsername, UsernameTakenError, setSharing, getTaker, joinSession } from './takers'
 
 describe('takers data layer (emulator)', () => {
   beforeEach(async () => { (await getTestEnv()).clearFirestore() })
@@ -80,6 +80,18 @@ describe('takers data layer (emulator)', () => {
       await setSharing(db, 'lockme', true)
       await expect(setSharing(db, 'lockme', false)).rejects.toThrow(/can.?t.*stop sharing|locked/i)
       expect((await getTaker(db, 'lockme'))?.sharing).toBe(true)
+    })
+  })
+
+  it('joinSession binds a session-less taker, and never hops an already-bound one', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await upsertTaker(db, 'joiner', { ownerUid: 'u1', sessionId: null })
+      await joinSession(db, 'joiner', 'S1')
+      expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
+      await joinSession(db, 'joiner', 'S2') // no-op: already bound
+      expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
     })
   })
 })
