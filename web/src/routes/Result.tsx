@@ -9,12 +9,13 @@ interface Props {
   t: number
   group: Group | null
   sharing: boolean
+  sessionEnded?: boolean
   entries: SharedEntry[]
   onToggleShare: (next: boolean) => void
   onStartOver: () => void
 }
 
-export function Result({ username, type, t, group, sharing, entries, onToggleShare, onStartOver }: Props) {
+export function Result({ username, type, t, group, sharing, sessionEnded = false, entries, onToggleShare, onStartOver }: Props) {
   return (
     <div className="screen">
       <div className="screen-center">
@@ -35,12 +36,19 @@ export function Result({ username, type, t, group, sharing, entries, onToggleSha
 
         <button onClick={onStartOver} style={{ marginTop: '1.6rem', background: 'none', border: 'none', color: 'var(--teal)', textDecoration: 'underline', cursor: 'pointer', fontSize: '.85rem' }}>↺ Start over</button>
 
-        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.4rem', fontSize: '.9rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={sharing} onChange={(e) => onToggleShare(e.target.checked)} />
-          Share my result with this session
+        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.4rem', fontSize: '.9rem', cursor: sharing ? 'default' : 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={sharing}
+            disabled={sharing || sessionEnded}
+            onChange={(e) => onToggleShare(e.target.checked)}
+          />
+          {sharing ? 'Sharing on — your result is visible to this session' : 'Share my result with this session'}
         </label>
 
-        {sharing && <SharedList entries={entries} />}
+        {sharing && (sessionEnded
+          ? <p style={{ marginTop: '1rem', opacity: 0.8 }}>Your session has ended.</p>
+          : <SharedList entries={entries} />)}
       </div>
     </div>
   )
