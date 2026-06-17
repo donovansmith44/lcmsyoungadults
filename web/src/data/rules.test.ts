@@ -79,4 +79,26 @@ describe('security rules (emulator)', () => {
     const db = env.unauthenticatedContext().firestore()
     await assertFails(getDoc(doc(db, 'takers', 'bob')))
   })
+
+  it('a taker cannot turn sharing from true back to false', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'takers', 'shara'),
+        { username: 'shara', ownerUid: 'uidA', completed: true, sharing: true, group: null })
+    })
+    const a = env.authenticatedContext('uidA', {}).firestore()
+    await assertFails(setDoc(doc(a, 'takers', 'shara'),
+      { username: 'shara', ownerUid: 'uidA', completed: true, sharing: false, group: null }))
+  })
+
+  it('a taker can turn sharing from false to true', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'takers', 'sharb'),
+        { username: 'sharb', ownerUid: 'uidA', completed: true, sharing: false, group: null })
+    })
+    const a = env.authenticatedContext('uidA', {}).firestore()
+    await assertSucceeds(setDoc(doc(a, 'takers', 'sharb'),
+      { username: 'sharb', ownerUid: 'uidA', completed: true, sharing: true, group: null }))
+  })
 })

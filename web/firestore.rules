@@ -18,9 +18,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid;
       // the owner may update/delete their own doc; admins may update (group override)
+      // sharing is irreversible: once true it cannot be set back to false
       allow update: if signedIn()
         && (resource.data.ownerUid == request.auth.uid || isAdmin())
-        && request.resource.data.ownerUid == resource.data.ownerUid;
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && (resource.data.get('sharing', false) != true || request.resource.data.sharing == true);
       allow delete: if signedIn()
         && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
