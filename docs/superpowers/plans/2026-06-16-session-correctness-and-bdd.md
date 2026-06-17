@@ -18,6 +18,7 @@
 - Emulator-backed Vitest tests use `getTestEnv()` from `test/emulator` with `assertFails`/`assertSucceeds` and `env.withSecurityRulesDisabled` / `env.authenticatedContext(uid, {email})` (see `src/data/rules.test.ts`).
 - e2e helpers live in `e2e/helpers/flows.ts` (`begin`, `answerAll`, `dismissSharing`, `signInAdmin`) and `e2e/fixtures/emulator.ts` (`clearFirestore`, `seedDoc`, `seedAdmin`, `seedSession`, `seedTaker`). Tests import `test`/`expect` from `e2e/fixtures/test`.
 - The test is **32** OEJTS items (`OEJTS_ITEMS`); never hard-code a different count.
+- **Shared-list selector convention:** the result header renders `{username}, your answers point to`, so the taker's own username always appears on the result screen even when no list shows. To assert the shared-list **region** present/absent, match the unique `SharedList` header text **`Shared in this session`** (`src/ui/SharedList.tsx:8`) — never the taker's own username. Asserting a *different* user's name in the list (e.g. another session member) is fine, since that name appears only in the list. Each row is `User: {username}` / `Test Result: {type}`.
 - Commit after each task with the message shown. Run the relevant test command before committing.
 - **Running tests (IMPORTANT — overrides any `npm run test:rules`/`test:e2e:ci` in task steps):** a Firestore+Auth emulator is already running on `localhost:8080`/`9099` and a Vite dev server (HMR) on `127.0.0.1:5173`. Run emulator-backed Vitest tests with `npx vitest run src/data/<file>.test.ts [-t "name"]` and e2e with `npx playwright test <spec> [-g "name"]`. Both reuse the running servers. Do **not** run `npm run test:rules` or `npm run test:e2e:ci` — they boot a second emulator and fail with port conflicts. (`npm run test:e2e -- <spec>` is equivalent to the `npx playwright` form and also fine.)
 
@@ -329,7 +330,7 @@ test('Share path: list shown and toggle locked on', async ({ page }) => {
   })
   await test.step('Then they see the participant list and cannot un-share', async () => {
     await expect(page.getByText(/your answers point to/i)).toBeVisible()
-    await expect(page.getByText(/share-sara/i)).toBeVisible() // own row in the shared list
+    await expect(page.getByText(/shared in this session/i)).toBeVisible() // shared-list region present
     await expect(page.getByRole('checkbox')).toBeDisabled()
   })
 })
@@ -343,12 +344,12 @@ test('Private path: no list, toggle available; enabling it reveals list and lock
   })
   await test.step('Then no list shows and the toggle is enabled', async () => {
     await expect(page.getByText(/your answers point to/i)).toBeVisible()
-    await expect(page.getByText(/priv-pat/i)).toHaveCount(0)
+    await expect(page.getByText(/shared in this session/i)).toHaveCount(0)
     await expect(page.getByRole('checkbox')).toBeEnabled()
   })
   await test.step('When they toggle sharing on, Then the list appears and the toggle locks', async () => {
     await page.getByRole('checkbox').check()
-    await expect(page.getByText(/priv-pat/i)).toBeVisible()
+    await expect(page.getByText(/shared in this session/i)).toBeVisible()
     await expect(page.getByRole('checkbox')).toBeDisabled()
   })
 })
@@ -447,7 +448,7 @@ test('Session ended under a sharing taker shows "your session has ended"', async
     await begin(page, 'ended-eli')
     await answerAll(page)
     await page.getByRole('button', { name: /yes, share/i }).click()
-    await expect(page.getByText(/ended-eli/i)).toBeVisible() // list visible while active
+    await expect(page.getByText(/shared in this session/i)).toBeVisible() // list visible while active
   })
   await test.step('When the admin ends the session', async () => {
     await updateSeededDoc('sessions/se1', { status: 'ended', endedAt: new Date() })
@@ -463,7 +464,7 @@ test('Session deleted under a sharing taker shows the ended message', async ({ p
   await begin(page, 'gone-gus')
   await answerAll(page)
   await page.getByRole('button', { name: /yes, share/i }).click()
-  await expect(page.getByText(/gone-gus/i)).toBeVisible()
+  await expect(page.getByText(/shared in this session/i)).toBeVisible()
   await deleteSeededDoc('sessions/se2')
   await expect(page.getByText(/your session has ended/i)).toBeVisible()
 })
@@ -918,7 +919,7 @@ test('Lifecycle: delete A, create B; B cannot see A', async ({ page, browser }) 
     await page.getByRole('button', { name: /yes, share/i }).click()
   })
   await test.step('Then B\'s taker sees only B, never the deleted A\'s sharer', async () => {
-    await expect(page.getByText(/ben-B/i)).toBeVisible()
+    await expect(page.getByText(/shared in this session/i)).toBeVisible()
     await expect(page.getByText(/ann-A/i)).toHaveCount(0)
   })
 })
@@ -930,7 +931,7 @@ test('No active session at Begin: taker stays private with no list', async ({ pa
   await page.getByRole('button', { name: /no, keep private/i }).click()
   await expect(page.getByText(/your answers point to/i)).toBeVisible()
   await expect(page.getByRole('checkbox')).toBeEnabled()
-  await expect(page.getByText(/lonely-lou/i).nth(1)).toHaveCount(0) // no shared-list row
+  await expect(page.getByText(/shared in this session/i)).toHaveCount(0) // no shared-list region
 })
 ```
 
@@ -1268,7 +1269,7 @@ test('Auto-join: a mid-test session-less taker is bound when a session starts', 
   await test.step('Then finishing and sharing puts them in that session\'s list', async () => {
     await answerAll(page) // answers remaining items
     await page.getByRole('button', { name: /yes, share/i }).click()
-    await expect(page.getByText(/early-eve/i)).toBeVisible() // own row => bound + sharing
+    await expect(page.getByText(/shared in this session/i)).toBeVisible() // bound + sharing => list region
   })
 })
 
@@ -1285,7 +1286,7 @@ test('Opt-in join: a finished session-less taker can join a later session', asyn
     await seedSession('later', { name: 'Later', timerMinutes: 30 })
     await page.getByRole('button', { name: /join this session/i }).click()
     await page.getByRole('checkbox').check()
-    await expect(page.getByText(/done-dan/i)).toBeVisible()
+    await expect(page.getByText(/shared in this session/i)).toBeVisible()
   })
 })
 ```
