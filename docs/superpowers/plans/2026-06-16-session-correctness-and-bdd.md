@@ -982,8 +982,8 @@ test('Simultaneous takers: sharers see each other live; a private one is hidden'
     await pC.getByRole('button', { name: /no, keep private/i }).click()
   })
   await test.step('Then amy and ben see each other live; cat appears to nobody', async () => {
-    await expect(pA.getByText(/ben/i)).toBeVisible()
-    await expect(pB.getByText(/amy/i)).toBeVisible()
+    await expect(pA.getByText(/\bben\b/i)).toBeVisible()
+    await expect(pB.getByText(/\bamy\b/i)).toBeVisible()
     await expect(pA.getByText(/\bcat\b/i)).toHaveCount(0)
     await expect(pB.getByText(/\bcat\b/i)).toHaveCount(0)
   })
