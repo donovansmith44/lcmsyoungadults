@@ -3,6 +3,9 @@ import { clearFirestore, seedSession } from './fixtures/emulator'
 import { begin, answerAll } from './helpers/flows'
 
 test('Simultaneous takers: sharers see each other live; a private one is hidden', async ({ browser }) => {
+  // Three browser contexts each answer all 32 items in parallel on one CPU; the per-item
+  // wait-for-advance makes this heavier than a single-actor flow, so give it room.
+  test.setTimeout(60_000)
   await clearFirestore()
   await seedSession('live', { name: 'Live', timerMinutes: 30 })
 
