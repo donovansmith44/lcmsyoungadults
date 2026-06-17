@@ -27,10 +27,17 @@ export async function signInAdmin(page: Page, email: string) {
   await page.getByRole('heading', { name: /session admin/i }).waitFor()
 }
 
-/** Answer all 32 items by clicking the middle radio each time. */
+/** Answer every remaining item by clicking the middle radio each time, until the question
+ *  screen yields to the sharing prompt (which has no radios). Behaves like the original fixed
+ *  32-click pass for a caller starting on item 1, and also stops cleanly when the caller
+ *  started part-way through (the auto-join test answers item 1 first), so it never
+ *  over-clicks into the sharing prompt. */
 export async function answerAll(page: Page) {
+  const radio = page.getByRole('radio').nth(2)
+  await radio.waitFor({ state: 'visible' })
   for (let i = 0; i < OEJTS_ITEMS.length; i++) {
-    await page.getByRole('radio').nth(2).click()
+    if (!(await radio.isVisible().catch(() => false))) break // reached the sharing prompt
+    await radio.click()
     await page.waitForTimeout(240)
   }
 }

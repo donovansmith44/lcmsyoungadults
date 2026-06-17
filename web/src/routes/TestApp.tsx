@@ -4,11 +4,12 @@ import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
 import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT, startedAtMs } from '../domain/timer'
-import { upsertTaker, recordAnswer, setSharing, UsernameTakenError } from '../data/takers'
+import { upsertTaker, recordAnswer, setSharing, joinSession, UsernameTakenError } from '../data/takers'
 import { FirebaseError } from 'firebase/app'
 import { submitTest } from '../data/submit'
 import { getActiveSession } from '../data/sessions'
 import { useSession } from '../hooks/useSession'
+import { useActiveSessionId } from '../hooks/useActiveSessionId'
 import { useTaker } from '../hooks/useTaker'
 import { useSharedList } from '../hooks/useSharedList'
 import { useNow } from '../hooks/useNow'
@@ -36,6 +37,7 @@ export function TestApp() {
   const [sharedChoiceMade, setSharedChoiceMade] = useState(false)
   const [beginError, setBeginError] = useState<string | null>(null)
   const { taker, loading: takerLoading } = useTaker(username)
+  const activeSessionId = useActiveSessionId()
   // The session the taker actually belongs to (may differ from the active one once
   // they've finished and the admin has moved on / ended it).
   const takerSession = useSession(taker?.sessionId ?? null)
@@ -81,6 +83,13 @@ export function TestApp() {
     try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
     setUsername(name); setIndex(0); setResumed(true); setTimeoutPrompted(false); setSharedChoiceMade(false); setPhase('test')
   }
+
+  // Session-less taker still testing → silently join a session that becomes active.
+  useEffect(() => {
+    if (username && taker && !taker.completed && taker.sessionId == null && activeSessionId) {
+      void joinSession(db, username, activeSessionId)
+    }
+  }, [username, taker, activeSessionId])
 
   // Abandon the current attempt and return to the username landing.
   const goLanding = () => {
@@ -214,6 +223,7 @@ export function TestApp() {
   if (phase === 'sharing') return <SharingPrompt onChoose={onChooseShare} />
 
   if (phase === 'result' && taker) {
+    const canJoin = !!taker.completed && taker.sessionId == null && activeSessionId != null
     return (
       <Result
         username={taker.username}
@@ -222,6 +232,8 @@ export function TestApp() {
         group={taker.group}
         sharing={taker.sharing}
         sessionEnded={sessionEnded}
+        canJoin={canJoin}
+        onJoin={() => { if (activeSessionId) void joinSession(db, username, activeSessionId) }}
         entries={entries}
         onToggleShare={(next) => { if (next) void setSharing(db, username, true) }}
         onStartOver={goLanding}
