@@ -26,10 +26,12 @@ test('Non-allowlisted Google user is denied the admin console', async ({ page })
   await page.getByRole('button', { name: /sign in with google/i }).click()
   const popup = await popupPromise
   await popup.waitForLoadState('domcontentloaded')
+  await popup.locator('.js-new-account').waitFor()
   await popup.locator('.js-new-account').click()
   await popup.locator('#email-input').fill('stranger@gmail.com')
   await popup.locator('#display-name-input').fill('Stranger')
   await popup.locator('#sign-in').click()
+  await popup.waitForEvent('close')
   await expect(page.getByRole('heading', { name: /session admin/i })).toHaveCount(0)
 })
 
@@ -39,17 +41,19 @@ test('Delete requires typing DELETE exactly', async ({ page }) => {
   await signInAdmin(page, 'donovan.smith44@gmail.com')
   // Click the Delete button for this session
   await page.getByRole('button', { name: /^delete$/i }).first().click()
-  // Wrong value does not delete — DeleteConfirm disables the button when text !== 'DELETE'
-  // The modal input has role="textbox" explicitly; use nth(1) to skip the "Session name" input above.
-  const field = page.getByRole('textbox').nth(1)
+  // Scope to the DeleteConfirm modal card (the one containing the "Type DELETE" prompt)
+  // so selectors are semantic rather than positional — avoids drift if other inputs/buttons
+  // are added to the page.
+  const modal = page.locator('.card').filter({ hasText: /type .*delete.* and press the button/i })
+  const field = modal.getByRole('textbox')
+  const confirm = modal.getByRole('button', { name: /^delete$/i })
+  // Wrong value does not delete — DeleteConfirm disables the confirm button when text !== 'DELETE'
   await field.fill('nope')
-  // The confirm button in DeleteConfirm is labelled "Delete" and is disabled when text !== 'DELETE'
-  await expect(page.getByRole('button', { name: /^delete$/i }).last()).toBeDisabled()
+  await expect(confirm).toBeDisabled()
   // 'To Delete' session name still visible
   await expect(page.getByText(/To Delete/).first()).toBeVisible()
   // Correct value enables and deletes
   await field.fill('DELETE')
-  // nth(1): same targeting — the confirm Delete button in the modal
-  await page.getByRole('button', { name: /^delete$/i }).last().click()
+  await confirm.click()
   await expect(page.getByText(/To Delete/)).toHaveCount(0)
 })
