@@ -35,6 +35,17 @@ export async function seedSession(id: string, opts: { name: string; timerMinutes
   })
 }
 
+export async function updateSeededDoc(path: string, data: Record<string, unknown>) {
+  const [coll, id] = path.split('/')
+  const mask = Object.keys(data).map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&')
+  await fetch(`${FS}/${coll}/${id}?${mask}`, { method: 'PATCH', ...ADMIN, body: JSON.stringify({ fields: fields(data) }) })
+}
+
+export async function deleteSeededDoc(path: string) {
+  const [coll, id] = path.split('/')
+  await fetch(`${FS}/${coll}/${id}`, { method: 'DELETE', ...ADMIN })
+}
+
 /**
  * Seed a completed taker directly in Firestore, bypassing the browser flow.
  * Useful when tests need a taker in a session roster without driving the full quiz UI.

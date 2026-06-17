@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { db } from '../firebase'
 import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
@@ -38,6 +38,8 @@ export function TestApp() {
   // The session the taker actually belongs to (may differ from the active one once
   // they've finished and the admin has moved on / ended it).
   const takerSession = useSession(taker?.sessionId ?? null)
+  const sessionWasLoaded = useRef(false)
+  useEffect(() => { if (takerSession) sessionWasLoaded.current = true }, [takerSession])
   const now = useNow(1000)
 
   // Only authenticate when we're actually in the taker flow (a name has been entered
@@ -151,6 +153,10 @@ export function TestApp() {
   const liveSessionName = takerSession?.name ?? null
   const liveMinutesLeft = takerActive ? takerSessionT : null
 
+  const sessionDeleted = !!taker?.sessionId && sessionWasLoaded.current && takerSession == null
+  const sessionEnded = !!taker?.completed && !!taker?.sessionId
+    && (sessionDeleted || (takerSession != null && takerSession.status !== 'active'))
+
   // Result reveals the group once the taker's session is frozen, ended, deleted, or its
   // timer has elapsed.
   const resultRevealed = !takerSession || !takerActive || takerSession.groupsFrozenAt != null || takerSessionT === 0
@@ -211,8 +217,9 @@ export function TestApp() {
         t={resultT}
         group={taker.group}
         sharing={taker.sharing}
+        sessionEnded={sessionEnded}
         entries={entries}
-        onToggleShare={(next) => setSharing(db, username, next)}
+        onToggleShare={(next) => { if (next) void setSharing(db, username, true) }}
         onStartOver={goLanding}
       />
     )
