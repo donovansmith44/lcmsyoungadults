@@ -39,5 +39,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
+
+    // App singletons (e.g. the active-session pointer): readable by any signed-in
+    // client; writable only by admins (mirrors sessions).
+    match /meta/{doc} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
   }
 }

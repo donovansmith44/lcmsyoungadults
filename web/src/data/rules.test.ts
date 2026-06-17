@@ -101,4 +101,13 @@ describe('security rules (emulator)', () => {
     await assertSucceeds(setDoc(doc(a, 'takers', 'sharb'),
       { username: 'sharb', ownerUid: 'uidA', completed: true, sharing: true, group: null }))
   })
+
+  it('meta/activeSession: signed-in can read, only admin can write', async () => {
+    const env = await getTestEnv()
+    const anon = env.authenticatedContext('anon1', {}).firestore()
+    await assertSucceeds(getDoc(doc(anon, 'meta', 'activeSession')))
+    await assertFails(setDoc(doc(anon, 'meta', 'activeSession'), { sessionId: 'x' }))
+    const admin = env.authenticatedContext('a1', { email: 'admin@x.org' }).firestore()
+    await assertSucceeds(setDoc(doc(admin, 'meta', 'activeSession'), { sessionId: 'x' }))
+  })
 })
