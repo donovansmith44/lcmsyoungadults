@@ -33,6 +33,7 @@
 | BDD style | `test.step('Given …' / 'When …' / 'Then …')` in Playwright on the existing emulator harness. |
 | Route | Add redirect `/personality` → `/personality-test`. |
 | Admin email (emulator) | `donovan.smith44@gmail.com` seeded into the `admins` allowlist. |
+| Late join (session-less) | A taker who began before any session existed (`sessionId == null`) **auto-joins silently** the moment a session becomes active, *if still mid-test*. If they already **finished** session-less, they get an opt-in **"Join this session"** button on the result screen. A `sessionId` is set **only** null→value; an already-bound session never changes (no hopping). |
 
 ## 4. Behavior changes & implementation impact
 
@@ -61,6 +62,15 @@ Document in `web/README.md`: start emulators, run the seed script, then sign in 
 
 ### 4.6 Orphaned-taker view ("your session has ended")
 When a taker's bound session is **deleted or ended** out from under them, the result screen must not crash or show a stale/empty list. Instead, in place of the participant list, show a friendly **"Your session has ended"** message (the taker's own type/result and "read more" link still display). Detection: the taker's `sessionId` no longer resolves to an `active` session (doc missing, or `status !== 'active'`). This applies on both the live result screen (real-time listener observes the session disappear) and on a fresh revisit. `src/routes/Result.tsx` + the shared-list hook handle this state.
+
+### 4.7 Joining a session late (session-less takers)
+Today `sessionId` is captured at Begin and is immutable, so a taker who starts before any session exists is stranded session-less even if a session starts seconds later. New behavior so "people can do whatever they want":
+
+- **Live signal:** takers subscribe to the singleton `meta/activeSession` pointer (§4.3) via a `useActiveSessionId()` hook to learn the currently-active session id in real time.
+- **Auto-join (mid-test):** when a taker is `!completed`, `sessionId == null`, and an active session appears, the client silently binds them (`joinSession`) to that session. They continue testing and are grouped as a still-testing taker at the freeze (existing §8 behavior).
+- **Opt-in join (finished):** a taker who *completed* while session-less sees a **"Join this session"** button on the result screen when a session is active; tapping it binds them, after which the normal sharing UI applies.
+- **Invariant — bind once, never hop:** `joinSession` sets `sessionId` only when currently `null`, inside a transaction. Security rules permit a `takers` update to change `sessionId` only from `null` to a value (an already-set `sessionId` is immutable), preventing a taker from hopping between sessions.
+- **Out of scope:** group assignment for a *finished* late-joiner who joins **after** the session already froze follows the existing §8 "after the freeze" rule and is not redesigned here.
 
 ## 5. Identity & continual access (confirmation of existing model)
 
@@ -91,6 +101,9 @@ No code change to identity. Restated for the test spec:
 - **Lifecycle:** Given session A with sharers is deleted and session B is created with new sharers, Then B-participants cannot see A's results.
 - **Session ended under a taker:** Given a taker on the result screen of session A (live), When the admin **ends or deletes** session A, Then the participant list is replaced by the **"Your session has ended"** message And the taker's own type/result still displays (no crash). Verified both live (real-time) and on a fresh revisit.
 - **No active session:** Given no active session at Begin, Then the taker stays private with no list and cannot share.
+- **Auto-join mid-test:** Given a taker who began with no active session and is still answering, When an admin starts a session, Then the taker is silently bound to it; When they finish and share, Then they appear in that session's list and roster.
+- **Opt-in join after finishing:** Given a taker who finished while session-less, When a session is active, Then the result screen shows "Join this session"; When tapped, Then they bind and can share into it.
+- **No hopping:** Given a taker already bound to session A, When a write attempts to change their `sessionId` to B, Then security rules reject it.
 
 ### 6.4 Concurrency / multi-actor — `e2e/concurrency.spec.ts`
 - **Simultaneous takers:** Given multiple takers in one session testing at once, Then all complete And the shared list updates live as each opts in.

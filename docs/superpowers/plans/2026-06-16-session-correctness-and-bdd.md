@@ -19,6 +19,7 @@
 - e2e helpers live in `e2e/helpers/flows.ts` (`begin`, `answerAll`, `dismissSharing`, `signInAdmin`) and `e2e/fixtures/emulator.ts` (`clearFirestore`, `seedDoc`, `seedAdmin`, `seedSession`, `seedTaker`). Tests import `test`/`expect` from `e2e/fixtures/test`.
 - The test is **32** OEJTS items (`OEJTS_ITEMS`); never hard-code a different count.
 - Commit after each task with the message shown. Run the relevant test command before committing.
+- **Running tests (IMPORTANT — overrides any `npm run test:rules`/`test:e2e:ci` in task steps):** a Firestore+Auth emulator is already running on `localhost:8080`/`9099` and a Vite dev server (HMR) on `127.0.0.1:5173`. Run emulator-backed Vitest tests with `npx vitest run src/data/<file>.test.ts [-t "name"]` and e2e with `npx playwright test <spec> [-g "name"]`. Both reuse the running servers. Do **not** run `npm run test:rules` or `npm run test:e2e:ci` — they boot a second emulator and fail with port conflicts. (`npm run test:e2e -- <spec>` is equivalent to the `npx playwright` form and also fine.)
 
 ---
 
@@ -38,8 +39,11 @@
 - `e2e/identity.spec.ts`, `e2e/mobile.spec.ts`, `e2e/admin.spec.ts` — extend.
 
 **Create:**
-- `e2e/routing.spec.ts`, `e2e/share.spec.ts`, `e2e/session-scope.spec.ts`, `e2e/concurrency.spec.ts`, `e2e/scale.spec.ts`, `e2e/admin-auth.spec.ts`.
+- `e2e/routing.spec.ts`, `e2e/share.spec.ts`, `e2e/session-scope.spec.ts`, `e2e/concurrency.spec.ts`, `e2e/scale.spec.ts`, `e2e/admin-auth.spec.ts`, `e2e/join.spec.ts`.
 - `scripts/seed-emulator.mjs`.
+- `src/hooks/useActiveSessionId.ts` — live subscription to the `meta/activeSession` pointer (Tasks 15-16).
+
+**Late-join touch-points (Tasks 15-16):** `src/data/takers.ts` (`joinSession`), `firestore.rules` (`sessionId` null→value only), `src/routes/TestApp.tsx` (auto-join effect + `canJoin`), `src/routes/Result.tsx` ("Join this session" button).
 
 ---
 
@@ -1134,6 +1138,272 @@ git commit -m "test(e2e): name-taken message + concurrent name-claim race"
 
 ---
 
+## Task 15: Late join — `joinSession` data fn + sessionId-immutability rule
+
+**Files:**
+- Modify: `src/data/takers.ts`, `firestore.rules`
+- Test: `src/data/takers.test.ts`, `src/data/rules.test.ts`
+
+**Interfaces:**
+- Consumes: `takerRef` (existing, module-private).
+- Produces: `joinSession(db, username, sessionId)` binds `sessionId` only when currently `null` (transaction, idempotent no-op otherwise). Rules allow a `takers` update to set `sessionId` only `null→value`.
+
+- [ ] **Step 1: Write the failing data test** — append to `src/data/takers.test.ts`:
+
+```ts
+it('joinSession binds a session-less taker, and never hops an already-bound one', async () => {
+  const env = await getTestEnv()
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore()
+    await upsertTaker(db, 'joiner', { ownerUid: 'u1', sessionId: null })
+    await joinSession(db, 'joiner', 'S1')
+    expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
+    await joinSession(db, 'joiner', 'S2') // no-op: already bound
+    expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
+  })
+})
+```
+
+Add `joinSession` to the `./takers` import in `takers.test.ts`.
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `npx vitest run src/data/takers.test.ts -t joinSession`
+Expected: FAIL — `joinSession` is not exported.
+
+- [ ] **Step 3: Implement `joinSession`** — in `src/data/takers.ts`, add `runTransaction` to the firebase import and add:
+
+```ts
+/** Binds a session-less taker to a session. No-op if already bound (sessions never hop). */
+export async function joinSession(db: Firestore, username: string, sessionId: string): Promise<void> {
+  const ref = takerRef(db, username)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists() || snap.data().sessionId != null) return
+    tx.update(ref, { sessionId, updatedAt: serverTimestamp() })
+  })
+}
+```
+
+- [ ] **Step 4: Run it and watch it pass**
+
+Run: `npx vitest run src/data/takers.test.ts -t joinSession`
+Expected: PASS.
+
+- [ ] **Step 5: Write the failing rules tests** — append to `src/data/rules.test.ts`:
+
+```ts
+it('a taker may set sessionId from null to a value (join) but not change a set one (hop)', async () => {
+  const env = await getTestEnv()
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'takers', 'jna'),
+      { username: 'jna', ownerUid: 'uidA', completed: false, sharing: false, sessionId: null, group: null })
+    await setDoc(doc(ctx.firestore(), 'takers', 'jnb'),
+      { username: 'jnb', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'A', group: null })
+  })
+  const a = env.authenticatedContext('uidA', {}).firestore()
+  await assertSucceeds(setDoc(doc(a, 'takers', 'jna'),
+    { username: 'jna', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'A', group: null }))
+  await assertFails(setDoc(doc(a, 'takers', 'jnb'),
+    { username: 'jnb', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'B', group: null }))
+})
+```
+
+- [ ] **Step 6: Run it and watch the hop test fail**
+
+Run: `npx vitest run src/data/rules.test.ts -t "join"`
+Expected: FAIL — the hop (`A→B`) is currently allowed (rules don't lock `sessionId`).
+
+- [ ] **Step 7: Add the rule clause** — extend the `takers` `update` rule in `firestore.rules` so `sessionId` only goes `null→value` (combine with the existing sharing clause from Task 4):
+
+```
+allow update: if signedIn()
+  && (resource.data.ownerUid == request.auth.uid || isAdmin())
+  && request.resource.data.ownerUid == resource.data.ownerUid
+  && (resource.data.sharing != true || request.resource.data.sharing == true)
+  && (resource.data.sessionId == null || request.resource.data.sessionId == resource.data.sessionId);
+```
+
+- [ ] **Step 8: Run the rules tests and watch them pass**
+
+Run: `npx vitest run src/data/rules.test.ts`
+Expected: PASS (join allowed, hop denied, all prior rules intact).
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/data/takers.ts firestore.rules src/data/takers.test.ts src/data/rules.test.ts
+git commit -m "feat(sessions): joinSession + sessionId null->value-only rule (late join)"
+```
+
+---
+
+## Task 16: Late join — hook, auto-join, and "Join this session" UI
+
+**Files:**
+- Create: `src/hooks/useActiveSessionId.ts`, `e2e/join.spec.ts`
+- Modify: `src/routes/TestApp.tsx`, `src/routes/Result.tsx`
+
+**Interfaces:**
+- Consumes: `joinSession` (Task 15), `meta/activeSession` pointer.
+- Produces: `useActiveSessionId(): string | null`. `TestApp` auto-joins a mid-test session-less taker and passes `canJoin`/`onJoin` to `Result`. `Result` shows a "Join this session" button when `canJoin`.
+
+- [ ] **Step 1: Write the failing e2e** — create `e2e/join.spec.ts`:
+
+```ts
+import { test, expect } from './fixtures/test'
+import { clearFirestore, seedSession } from './fixtures/emulator'
+import { begin, answerAll } from './helpers/flows'
+
+test('Auto-join: a mid-test session-less taker is bound when a session starts', async ({ page }) => {
+  await clearFirestore() // no active session at Begin
+  await test.step('Given a taker begins with no active session and answers one question', async () => {
+    await begin(page, 'early-eve')
+    await page.getByRole('radio').nth(2).click()
+    await expect(page.getByText('2 / 32')).toBeVisible()
+  })
+  await test.step('When a session starts mid-test', async () => {
+    await seedSession('mid', { name: 'Mid', timerMinutes: 30 })
+  })
+  await test.step('Then finishing and sharing puts them in that session\'s list', async () => {
+    await answerAll(page) // answers remaining items
+    await page.getByRole('button', { name: /yes, share/i }).click()
+    await expect(page.getByText(/early-eve/i)).toBeVisible() // own row => bound + sharing
+  })
+})
+
+test('Opt-in join: a finished session-less taker can join a later session', async ({ page }) => {
+  await clearFirestore()
+  await test.step('Given a taker finishes with no active session (private)', async () => {
+    await begin(page, 'done-dan')
+    await answerAll(page)
+    await page.getByRole('button', { name: /no, keep private/i }).click()
+    await expect(page.getByText(/your answers point to/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /join this session/i })).toHaveCount(0)
+  })
+  await test.step('When a session starts, Then a Join button appears; tapping it lets them share', async () => {
+    await seedSession('later', { name: 'Later', timerMinutes: 30 })
+    await page.getByRole('button', { name: /join this session/i }).click()
+    await page.getByRole('checkbox').check()
+    await expect(page.getByText(/done-dan/i)).toBeVisible()
+  })
+})
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `npx playwright test join.spec.ts`
+Expected: FAIL — no auto-join, no "Join this session" button.
+
+- [ ] **Step 3: Create the hook** — create `src/hooks/useActiveSessionId.ts`:
+
+```ts
+import { useEffect, useState } from 'react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { db } from '../firebase'
+
+/** Live id of the currently-active session (from the meta/activeSession pointer), or null. */
+export function useActiveSessionId(): string | null {
+  const [id, setId] = useState<string | null>(null)
+  useEffect(() => onSnapshot(doc(db, 'meta', 'activeSession'), (snap) => {
+    setId(snap.exists() ? ((snap.data().sessionId as string | null) ?? null) : null)
+  }), [])
+  return id
+}
+```
+
+- [ ] **Step 4: Wire auto-join + canJoin in `TestApp`** — add imports near the top of `src/routes/TestApp.tsx`:
+
+```tsx
+import { upsertTaker, recordAnswer, setSharing, joinSession, UsernameTakenError } from '../data/takers'
+import { useActiveSessionId } from '../hooks/useActiveSessionId'
+```
+
+After the `useSession` line (~line 40) add the subscription:
+
+```tsx
+  const activeSessionId = useActiveSessionId()
+```
+
+Add the auto-join effect (near the other effects, after `onBegin`):
+
+```tsx
+  // Session-less taker still testing → silently join a session that becomes active.
+  useEffect(() => {
+    if (username && taker && !taker.completed && taker.sessionId == null && activeSessionId) {
+      void joinSession(db, username, activeSessionId)
+    }
+  }, [username, taker, activeSessionId])
+```
+
+Compute `canJoin` (a completed, session-less taker with an active session available) and pass it plus `onJoin` to `Result` — update the `<Result … />` block from Task 6:
+
+```tsx
+  if (phase === 'result' && taker) {
+    const canJoin = !!taker.completed && taker.sessionId == null && activeSessionId != null
+    return (
+      <Result
+        username={taker.username}
+        type={taker.type ?? ''}
+        t={resultT}
+        group={taker.group}
+        sharing={taker.sharing}
+        sessionEnded={sessionEnded}
+        canJoin={canJoin}
+        onJoin={() => { if (activeSessionId) void joinSession(db, username, activeSessionId) }}
+        entries={entries}
+        onToggleShare={(next) => { if (next) void setSharing(db, username, true) }}
+        onStartOver={goLanding}
+      />
+    )
+  }
+```
+
+- [ ] **Step 5: Add the Join button to `Result`** — extend the `Props` interface and render the button. In `src/routes/Result.tsx`, add to `Props`:
+
+```tsx
+  canJoin?: boolean
+  onJoin?: () => void
+```
+
+Add `canJoin = false, onJoin` to the destructured params. Then, immediately **before** the `<label>` share toggle, render the join affordance and gate the toggle so a session-less finished taker joins before sharing:
+
+```tsx
+        {canJoin && (
+          <button onClick={onJoin} style={{ marginTop: '1.2rem', background: 'var(--teal)', color: 'var(--cream)', border: 'none', borderRadius: 999, padding: '.6rem 1.2rem', fontWeight: 700, cursor: 'pointer' }}>
+            Join this session →
+          </button>
+        )}
+
+        {!canJoin && (
+          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'center', marginTop: '1.4rem', fontSize: '.9rem', cursor: sharing ? 'default' : 'pointer' }}>
+            <input type="checkbox" checked={sharing} disabled={sharing || sessionEnded} onChange={(e) => onToggleShare(e.target.checked)} />
+            {sharing ? 'Sharing on — your result is visible to this session' : 'Share my result with this session'}
+          </label>
+        )}
+```
+
+Keep the existing `{sharing && (sessionEnded ? … : <SharedList … />)}` block below unchanged.
+
+- [ ] **Step 6: Run it and watch it pass**
+
+Run: `npx playwright test join.spec.ts`
+Expected: both PASS.
+
+- [ ] **Step 7: Guard against regressions** — re-run the share + session-scope specs (they exercise the same `Result` block):
+
+Run: `npx playwright test share.spec.ts session-scope.spec.ts`
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/hooks/useActiveSessionId.ts src/routes/TestApp.tsx src/routes/Result.tsx e2e/join.spec.ts
+git commit -m "feat(join): auto-join mid-test + opt-in join on results for session-less takers"
+```
+
+---
+
 ## Final verification
 
 - [ ] **Run the unit/domain suite:** `npm test` — Expected: PASS.
@@ -1146,6 +1416,7 @@ git commit -m "test(e2e): name-taken message + concurrent name-claim race"
 
 ## Self-Review (completed during planning)
 
-- **Spec coverage:** Header §4.1→T1; irreversible sharing §4.2→T3/T4/T5; continual access §5 (no code, asserted in routing T2 deep-link + existing resume tests); orphaned taker §4.6→T6; single-active §4.3→T7/T8/T9; route alias §4.4→T2; emulator seed §4.5→T10; BDD §6.1→T5/T2, §6.2→T3/T4/T14, §6.3→T6/T11, §6.4/§6.4.1→T12/T13, §6.5→T9, §6.6→T1, §6.7→T2. All sections map to a task.
-- **Type consistency:** `setSharing`/`SharingLockedError` (T3), `Result` `sessionEnded?: boolean` (T5/T6), `meta/activeSession` `{ sessionId }` (T7/T8/T10), `updateSeededDoc`/`deleteSeededDoc` (T6, used T11/T13) are named consistently across tasks.
+- **Spec coverage:** Header §4.1→T1; irreversible sharing §4.2→T3/T4/T5; continual access §5 (no code, asserted in routing T2 deep-link + existing resume tests); orphaned taker §4.6→T6; single-active §4.3→T7/T8/T9; late join §4.7→T15/T16; route alias §4.4→T2; emulator seed §4.5→T10; BDD §6.1→T5/T2, §6.2→T3/T4/T14, §6.3→T6/T11/T16, §6.4/§6.4.1→T12/T13, §6.5→T9, §6.6→T1, §6.7→T2. All sections map to a task.
+- **Type consistency:** `setSharing`/`SharingLockedError` (T3), `Result` `sessionEnded?: boolean` + `canJoin?`/`onJoin?` (T5/T6/T16), `meta/activeSession` `{ sessionId }` (T7/T8/T10/T15/T16), `joinSession(db, username, sessionId)` (T15/T16), `useActiveSessionId()` (T16), `updateSeededDoc`/`deleteSeededDoc` (T6, used T11/T13) are named consistently across tasks.
+- **Ordering note:** T15/T16 depend on the `meta/activeSession` pointer + `meta` rules from T7/T8, which run earlier — safe.
 - **No placeholders:** every code/test step carries full code; selector caveats (DeleteConfirm) point to the file to verify rather than leaving a TODO.
