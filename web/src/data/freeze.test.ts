@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { getTestEnv } from '../../test/emulator'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore'
 import { freezeSessionGroups } from './freeze'
 
-async function seed(db: any, sessionId: string) {
+async function seed(db: Firestore, sessionId: string) {
   await setDoc(doc(db, 'sessions', sessionId), {
     name: 'A', status: 'active', timerMinutes: 30, startedAt: 1, endedAt: null,
     groupsFrozenAt: null, createdBy: 'd@x.org',

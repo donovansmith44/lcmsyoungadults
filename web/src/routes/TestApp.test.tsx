@@ -8,6 +8,7 @@ vi.mock('../data/takers', () => ({
   upsertTaker: vi.fn(() => Promise.resolve()),
   recordAnswer: vi.fn(() => Promise.resolve()),
   setSharing: vi.fn(() => Promise.resolve()),
+  joinSession: vi.fn(() => Promise.resolve()),
   UsernameTakenError: class UsernameTakenError extends Error {},
 }))
 vi.mock('../data/submit', () => ({ submitTest: vi.fn(() => Promise.resolve()) }))
@@ -19,9 +20,11 @@ vi.mock('../hooks/useSharedList', () => ({ useSharedList: () => [] }))
 vi.mock('../hooks/useNow', () => ({ useNow: () => mockNow }))
 vi.mock('../hooks/useSession', () => ({ useSession: () => mockTakerSession }))
 vi.mock('../hooks/useTaker', () => ({ useTaker: () => mockTaker }))
+vi.mock('../hooks/useActiveSessionId', () => ({ useActiveSessionId: () => mockActiveSessionId }))
 
 let mockNow = 9_999_999_999
 let mockActiveSession: unknown = null
+const mockActiveSessionId: string | null = null
 let mockTakerSession: unknown = null
 let mockTaker: unknown = null
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { db } from '../firebase'
 import { Button } from '../ui/Button'
 import { ensureAnonymous } from '../auth/takerAuth'
@@ -41,8 +41,11 @@ export function TestApp() {
   // The session the taker actually belongs to (may differ from the active one once
   // they've finished and the admin has moved on / ended it).
   const takerSession = useSession(taker?.sessionId ?? null)
-  const sessionWasLoaded = useRef(false)
-  useEffect(() => { if (takerSession) sessionWasLoaded.current = true }, [takerSession])
+  // Tracks whether the taker's session has ever loaded, so a momentary null during initial
+  // load isn't mistaken for deletion. State (not a ref) so the render that computes
+  // sessionDeleted re-runs when it flips.
+  const [sessionWasLoaded, setSessionWasLoaded] = useState(false)
+  useEffect(() => { if (takerSession && !sessionWasLoaded) setSessionWasLoaded(true) }, [takerSession, sessionWasLoaded])
   const now = useNow(1000)
 
   // Only authenticate when we're actually in the taker flow (a name has been entered
@@ -166,7 +169,7 @@ export function TestApp() {
   const liveSessionName = takerSession?.name ?? null
   const liveMinutesLeft = takerActive ? takerSessionT : null
 
-  const sessionDeleted = !!taker?.sessionId && sessionWasLoaded.current && takerSession == null
+  const sessionDeleted = !!taker?.sessionId && sessionWasLoaded && takerSession == null
   const sessionEnded = !!taker?.completed && !!taker?.sessionId
     && (sessionDeleted || (takerSession != null && takerSession.status !== 'active'))
 
