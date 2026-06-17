@@ -92,7 +92,18 @@ export async function completeTaker(
   })
 }
 
+export class SharingLockedError extends Error {
+  constructor() {
+    super("Can't stop sharing once it's on")
+    this.name = 'SharingLockedError'
+  }
+}
+
 export async function setSharing(db: Firestore, username: string, sharing: boolean): Promise<void> {
+  if (sharing === false) {
+    const snap = await getDoc(takerRef(db, username))
+    if (snap.exists() && snap.data().sharing === true) throw new SharingLockedError()
+  }
   await updateDoc(takerRef(db, username), { sharing, updatedAt: serverTimestamp() })
 }
 

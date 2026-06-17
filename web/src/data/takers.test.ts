@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { getTestEnv } from '../../test/emulator'
 import { getDoc, doc } from 'firebase/firestore'
-import { upsertTaker, recordAnswer, completeTaker, normalizeUsername, UsernameTakenError } from './takers'
+import { upsertTaker, recordAnswer, completeTaker, normalizeUsername, UsernameTakenError, setSharing, getTaker } from './takers'
 
 describe('takers data layer (emulator)', () => {
   beforeEach(async () => { (await getTestEnv()).clearFirestore() })
@@ -69,6 +69,17 @@ describe('takers data layer (emulator)', () => {
       await upsertTaker(db, 'Sam', { ownerUid: 'uidA', sessionId: null })
       await expect(upsertTaker(db, 'Sam', { ownerUid: 'uidB', sessionId: null }))
         .rejects.toBeInstanceOf(UsernameTakenError)
+    })
+  })
+
+  it('setSharing cannot turn sharing back off once enabled', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await upsertTaker(db, 'lockme', { ownerUid: 'u1', sessionId: 's1' })
+      await setSharing(db, 'lockme', true)
+      await expect(setSharing(db, 'lockme', false)).rejects.toThrow(/can.?t.*stop sharing|locked/i)
+      expect((await getTaker(db, 'lockme'))?.sharing).toBe(true)
     })
   })
 })
