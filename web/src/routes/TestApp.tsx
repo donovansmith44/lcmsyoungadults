@@ -5,6 +5,7 @@ import { ensureAnonymous } from '../auth/takerAuth'
 import { OEJTS_ITEMS } from '../domain/oejts'
 import { computeT, startedAtMs } from '../domain/timer'
 import { upsertTaker, recordAnswer, setSharing, UsernameTakenError } from '../data/takers'
+import { FirebaseError } from 'firebase/app'
 import { submitTest } from '../data/submit'
 import { getActiveSession } from '../data/sessions'
 import { useSession } from '../hooks/useSession'
@@ -72,6 +73,9 @@ export function TestApp() {
       await upsertTaker(db, name, { ownerUid: user.uid, sessionId: active?.id ?? null })
     } catch (e) {
       if (e instanceof UsernameTakenError) { setBeginError("That name's taken — choose another."); return }
+      // Firestore security rules reject a concurrent create-when-absent with permission-denied.
+      // Treat it the same as a sequential name clash: show the "taken" message.
+      if (e instanceof FirebaseError && e.code === 'permission-denied') { setBeginError("That name's taken — choose another."); return }
       throw e
     }
     try { localStorage.setItem(STORAGE_KEY, name) } catch { /* ignore */ }
