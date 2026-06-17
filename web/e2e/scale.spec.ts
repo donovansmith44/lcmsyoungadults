@@ -21,8 +21,10 @@ test('30+ takers in mixed states: a live actor sees exactly the completed+shared
         // completed + private
         jobs.push(seedTaker(name, 'big', { type: 'ESTP' }))
       } else {
-        // still testing (not completed)
-        jobs.push(seedTaker(name, 'big', { completed: false, type: 'INTP' }))
+        // still testing (not completed) but sharing:true — so the client-side `completed`
+        // filter in useSharedList is the ONLY thing excluding them, genuinely exercising it
+        // (rather than their absence being trivially guaranteed by sharing:false).
+        jobs.push(seedTaker(name, 'big', { completed: false, type: 'INTP' }).then(() => updateSeededDoc(`takers/${name}`, { sharing: true })))
       }
     }
     // plus a few in the OTHER session, shared — must never appear
@@ -40,7 +42,7 @@ test('30+ takers in mixed states: a live actor sees exactly the completed+shared
     await test.step('Then they see every shared crowd member, none of the private/testing, and nobody from the other session', async () => {
       for (const n of sharedNames) await expect(page.getByText(new RegExp(`\\b${n}\\b`))).toBeVisible()
       await expect(page.getByText(/\bcrowd-1\b/)).toHaveCount(0)   // private
-      await expect(page.getByText(/\bcrowd-2\b/)).toHaveCount(0)   // still testing
+      await expect(page.getByText(/\bcrowd-2\b/)).toHaveCount(0)   // still testing (shared but !completed → excluded by the completed filter)
       await expect(page.getByText(/other-1/)).toHaveCount(0)       // other session
     })
     await ctx.close()
