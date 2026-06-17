@@ -17,18 +17,20 @@ test('a taker is bound to the session active at begin and shows its name (E6, R3
   await expect(page.getByText('join-jan')).toBeVisible()       // bound -> in the roster (R3)
 })
 
-test('a pre-session taker stays private — not recorded into a later session (E5, R3)', async ({ page, browser }) => {
+test('a taker who FINISHED before any session stays private — not auto-joined into a later session (E5, R3)', async ({ page, browser }) => {
+  // Late-join (design §4.7): auto-join silently binds a STILL-TESTING session-less taker when
+  // a session starts (covered positively in join.spec.ts). A taker who already COMPLETED while
+  // session-less is NOT auto-joined — they stay private unless they opt in via "Join this
+  // session". This test pins that invariant: finish first, THEN a session starts.
   await seedAdmin('admin@x.org')
   // NO active session yet
   const tc = await browser.newContext(); const tp = await tc.newPage()
   await begin(tp, 'early-eli')
-  // Wait until early-eli is actually on the test (begin's async bind has resolved with NO
-  // active session) BEFORE the session starts — otherwise we'd race the bind against the seed.
   await expect(tp.getByText('1 / 32')).toBeVisible()
-  await seedSession('sLate', { name: 'Late', timerMinutes: 30 })   // session begins after they started
   await answerAll(tp); await dismissSharing(tp)
-  await expect(tp.getByText(/your answers point to/i)).toBeVisible() // they see their OWN result
-  await tc.close()
+  await expect(tp.getByText(/your answers point to/i)).toBeVisible() // finished, session-less
+  await seedSession('sLate', { name: 'Late', timerMinutes: 30 })     // session begins AFTER they finished
+  await tc.close()                                                   // they never opt in to join
 
   // A SECOND taker who began AFTER the session started — genuinely a member of 'Late'.
   const tc2 = await browser.newContext(); const tp2 = await tc2.newPage()
@@ -38,9 +40,9 @@ test('a pre-session taker stays private — not recorded into a later session (E
   await signInAdmin(page, 'admin@x.org')
   await page.getByRole('button', { name: /^late/i }).click()
   // Anchor on the genuine member so the roster has definitely loaded its real members
-  // before we assert the pre-session taker is absent (no vacuous toHaveCount(0)).
+  // before we assert the finished pre-session taker is absent (no vacuous toHaveCount(0)).
   await expect(page.getByText('late-len')).toBeVisible()         // the real member IS present
-  await expect(page.getByText('early-eli')).toHaveCount(0)       // the pre-session taker is NOT
+  await expect(page.getByText('early-eli')).toHaveCount(0)       // the finished pre-session taker is NOT auto-joined
   await tc2.close()
 })
 
