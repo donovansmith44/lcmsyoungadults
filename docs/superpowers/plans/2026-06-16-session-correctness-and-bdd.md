@@ -1285,7 +1285,7 @@ test('Opt-in join: a finished session-less taker can join a later session', asyn
   await test.step('When a session starts, Then a Join button appears; tapping it lets them share', async () => {
     await seedSession('later', { name: 'Later', timerMinutes: 30 })
     await page.getByRole('button', { name: /join this session/i }).click()
-    await page.getByRole('checkbox').check()
+    await page.getByRole('checkbox').click() // click, not check(): React-controlled checkbox backed by async Firestore
     await expect(page.getByText(/shared in this session/i)).toBeVisible()
   })
 })
