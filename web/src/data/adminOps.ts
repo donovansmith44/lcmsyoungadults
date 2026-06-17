@@ -1,5 +1,5 @@
 import {
-  Firestore, doc, updateDoc, collection, query, where, getDocs, serverTimestamp,
+  Firestore, doc, updateDoc, collection, query, where, getDocs, serverTimestamp, runTransaction,
 } from 'firebase/firestore'
 import { freezeGroups } from '../domain/grouping'
 import type { Group, TakerForGrouping } from '../domain/types'
@@ -29,6 +29,10 @@ export async function recomputeSessionGroups(db: Firestore, sessionId: string): 
 
 export async function deleteSession(db: Firestore, id: string): Promise<void> {
   // Delete the session doc; takers keep their sessionId for archival audit.
-  const { deleteDoc } = await import('firebase/firestore')
-  await deleteDoc(doc(db, 'sessions', id))
+  const pointerRef = doc(db, 'meta', 'activeSession')
+  await runTransaction(db, async (tx) => {
+    const ptr = await tx.get(pointerRef)
+    tx.delete(doc(db, 'sessions', id))
+    if (ptr.exists() && ptr.data().sessionId === id) tx.set(pointerRef, { sessionId: null })
+  })
 }

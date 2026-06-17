@@ -38,4 +38,33 @@ describe('sessions data layer (emulator)', () => {
       await archiveSession(db, id)
     })
   })
+
+  it('two concurrent starts produce exactly one active session', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      const results = await Promise.allSettled([
+        startSession(db, { name: 'A', timerMinutes: 30, createdBy: 'd@x.org' }),
+        startSession(db, { name: 'B', timerMinutes: 30, createdBy: 'd@x.org' }),
+      ])
+      const ok = results.filter((r) => r.status === 'fulfilled')
+      expect(ok).toHaveLength(1)
+      const active = await getActiveSession(db)
+      expect(active).not.toBeNull()
+      // only one session doc exists
+      const { getDocs, collection } = await import('firebase/firestore')
+      const snap = await getDocs(collection(db, 'sessions'))
+      expect(snap.size).toBe(1)
+    })
+  })
+
+  it('ending a session clears the active pointer so a new one can start', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      const id = await startSession(db, { name: 'A', timerMinutes: 30, createdBy: 'd@x.org' })
+      await endSession(db, id)
+      await expect(startSession(db, { name: 'B', timerMinutes: 30, createdBy: 'd@x.org' })).resolves.toBeTruthy()
+    })
+  })
 })

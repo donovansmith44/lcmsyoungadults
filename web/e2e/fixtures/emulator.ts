@@ -29,10 +29,12 @@ export async function seedAdmin(email: string) {
 }
 
 export async function seedSession(id: string, opts: { name: string; timerMinutes: number; status?: string; startedAt?: Date }) {
+  const status = opts.status ?? 'active'
   await seedDoc(`sessions/${id}`, {
-    name: opts.name, timerMinutes: opts.timerMinutes, status: opts.status ?? 'active',
+    name: opts.name, timerMinutes: opts.timerMinutes, status,
     startedAt: opts.startedAt ?? new Date(), groupsFrozenAt: null, createdBy: 'seed',
   })
+  if (status === 'active') await seedDoc(`meta/activeSession`, { sessionId: id })
 }
 
 export async function updateSeededDoc(path: string, data: Record<string, unknown>) {

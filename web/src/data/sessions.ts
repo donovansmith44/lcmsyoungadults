@@ -1,6 +1,6 @@
 import {
-  Firestore, collection, addDoc, doc, updateDoc, getDocs, query, where, limit,
-  serverTimestamp,
+  Firestore, collection, doc, updateDoc, getDocs, query, where, limit,
+  serverTimestamp, runTransaction,
 } from 'firebase/firestore'
 
 export type SessionStatus = 'active' | 'ended' | 'archived'
@@ -30,22 +30,34 @@ export async function getActiveSession(db: Firestore): Promise<SessionDoc | null
   return { id: d.id, ...(d.data() as Omit<SessionDoc, 'id'>) }
 }
 
+const activePointer = (db: Firestore) => doc(db, 'meta', 'activeSession')
+
 export async function startSession(db: Firestore, input: StartSessionInput): Promise<string> {
   if (await getActiveSession(db)) throw new Error('There is already an active session')
-  const ref = await addDoc(collection(db, 'sessions'), {
-    name: input.name,
-    status: 'active' as SessionStatus,
-    timerMinutes: input.timerMinutes,
-    startedAt: serverTimestamp(),
-    endedAt: null,
-    groupsFrozenAt: null,
-    createdBy: input.createdBy,
+  const ref = doc(collection(db, 'sessions'))
+  await runTransaction(db, async (tx) => {
+    const ptr = await tx.get(activePointer(db))
+    if (ptr.exists() && ptr.data().sessionId) throw new Error('There is already an active session')
+    tx.set(ref, {
+      name: input.name,
+      status: 'active' as SessionStatus,
+      timerMinutes: input.timerMinutes,
+      startedAt: serverTimestamp(),
+      endedAt: null,
+      groupsFrozenAt: null,
+      createdBy: input.createdBy,
+    })
+    tx.set(activePointer(db), { sessionId: ref.id })
   })
   return ref.id
 }
 
 export async function endSession(db: Firestore, id: string): Promise<void> {
-  await updateDoc(doc(db, 'sessions', id), { status: 'ended', endedAt: serverTimestamp() })
+  await runTransaction(db, async (tx) => {
+    const ptr = await tx.get(activePointer(db))
+    tx.update(doc(db, 'sessions', id), { status: 'ended', endedAt: serverTimestamp() })
+    if (ptr.exists() && ptr.data().sessionId === id) tx.set(activePointer(db), { sessionId: null })
+  })
 }
 
 export async function archiveSession(db: Firestore, id: string): Promise<void> {
