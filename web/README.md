@@ -71,3 +71,16 @@ export default defineConfig([
   },
 ])
 ```
+
+## Develop
+
+### Hand-testing with a local admin
+
+```bash
+cd web
+npm run emulators              # in one terminal (Firestore :8080, Auth :9099)
+npm run dev                    # in another (Vite)
+node scripts/seed-emulator.mjs # seed admin allowlist + a demo active session
+```
+
+Open `/admin`, click **Sign in with Google**, then in the emulator popup choose **Add new account** and enter `donovan.smith44@gmail.com`. That email is in the seeded `admins` allowlist, so the console loads.
