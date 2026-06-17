@@ -57,7 +57,7 @@ test('Given two devices racing the same fresh name, Then exactly one is admitted
 
   // Wait for each page to settle to one of the two outcomes before counting.
   await Promise.all([p1, p2].map((p) =>
-    p.waitForSelector(':is(:text("1 / 32"), :text-matches("taken", "i"))', { timeout: 10000 })
+    expect(p.getByText(/1 \/ 32|taken/i).first()).toBeVisible({ timeout: 10000 })
   ))
 
   // One page shows the question flow; the other shows the taken error.
