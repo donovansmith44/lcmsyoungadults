@@ -9,7 +9,7 @@ export function Landing({ onBegin, error }: { onBegin: (username: string) => voi
       <div className="screen-center">
         <img src="/brand/logo.png" alt="" width={86} height={86} style={{ marginBottom: '.4rem' }} />
         <div className="eyebrow">Lutheran Young Adults</div>
-        <h1 style={{ fontWeight: 800, fontSize: '2.4rem', letterSpacing: '.02em', lineHeight: 1.05, margin: '.5rem 0 0' }}>Personality&nbsp;Test</h1>
+        <h1 style={{ color: 'var(--teal)', fontWeight: 800, fontSize: '2.4rem', letterSpacing: '.02em', lineHeight: 1.05, margin: '.5rem 0 0' }}>Personality&nbsp;Test</h1>
         <div style={{ width: '100%', marginTop: '1.8rem' }}>
           <input
             placeholder="enter a username…"

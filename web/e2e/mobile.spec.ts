@@ -25,3 +25,13 @@ test('question text is brand teal with AA contrast on mobile (R10)', async ({ pa
   })
   expect(ratio).toBeGreaterThanOrEqual(4.5)
 })
+
+test('landing header is brand teal, not a washed-out default (R10)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 }) // iPhone 12-ish
+  await page.goto('/personality-test')
+  const h1 = page.getByRole('heading', { name: /personality test/i })
+  await expect(h1).toBeVisible()
+  const color = await h1.evaluate((el) => getComputedStyle(el).color)
+  // var(--teal) #01404f === rgb(1, 64, 79)
+  expect(color).toBe('rgb(1, 64, 79)')
+})
