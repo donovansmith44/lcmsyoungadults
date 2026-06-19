@@ -36,13 +36,25 @@ export interface TakerDoc {
 const takerRef = (db: Firestore, username: string) =>
   doc(db, 'takers', normalizeUsername(username))
 
-/** Claims a username for this browser. Resumes if already owned; throws if owned elsewhere. */
+/**
+ * Claims a username for this browser. Resumes if already owned by this browser.
+ * Name uniqueness is scoped to the active session: a name is only "taken" if an
+ * existing taker owned by a different browser is bound to the session this taker is
+ * joining (args.sessionId). A stale name (held by a taker from a past/other session,
+ * or held while no session is running) is reclaimable — the old doc is overwritten.
+ */
 export async function upsertTaker(db: Firestore, username: string, args: BeginTakerArgs): Promise<void> {
   const ref = takerRef(db, username)
   const snap = await getDoc(ref)
   if (snap.exists()) {
-    if (snap.data().ownerUid !== args.ownerUid) throw new UsernameTakenError(username)
-    return // same browser re-claiming -> resume; joined session stays immutable
+    const existing = snap.data()
+    if (existing.ownerUid === args.ownerUid) return // same browser re-claiming -> resume
+    const existingSession = (existing.sessionId ?? null) as string | null
+    // Taken only when the existing taker is in the session we're joining right now.
+    if (args.sessionId !== null && existingSession === args.sessionId) {
+      throw new UsernameTakenError(username)
+    }
+    // else: stale/session-less name -> fall through and overwrite (reclaim).
   }
   await setDoc(ref, {
     username: username.trim(),

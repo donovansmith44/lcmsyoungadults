@@ -11,6 +11,14 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
     }
 
+    // The currently-running session id (from the meta/activeSession pointer), or null
+    // when none is running. Used to scope taker-name uniqueness to the active session.
+    function activeSessionId() {
+      return exists(/databases/$(database)/documents/meta/activeSession)
+        ? get(/databases/$(database)/documents/meta/activeSession).data.get('sessionId', null)
+        : null;
+    }
+
     // Takers: doc id is the unique (normalized) username. Browser-owned via ownerUid.
     match /takers/{username} {
       allow read: if signedIn();
@@ -19,11 +27,22 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid;
       // the owner may update/delete their own doc; admins may update (group override)
       // sharing is irreversible: once true it cannot be set back to false
-      allow update: if signedIn()
-        && (resource.data.ownerUid == request.auth.uid || isAdmin())
-        && request.resource.data.ownerUid == resource.data.ownerUid
-        && (resource.data.get('sharing', false) != true || request.resource.data.sharing == true)
-        && (resource.data.get('sessionId', null) == null || request.resource.data.get('sessionId', null) == resource.data.get('sessionId', null));
+      allow update: if signedIn() && (
+        // (a) normal owner/admin update — the taker keeps its identity
+        (
+          (resource.data.ownerUid == request.auth.uid || isAdmin())
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && (resource.data.get('sharing', false) != true || request.resource.data.sharing == true)
+          && (resource.data.get('sessionId', null) == null || request.resource.data.get('sessionId', null) == resource.data.get('sessionId', null))
+        )
+        // (b) reclaim a stale name — a DIFFERENT browser takes over a taker that is NOT
+        // bound to the currently-running session (past-session or session-less name frees up).
+        || (
+          request.resource.data.ownerUid == request.auth.uid
+          && resource.data.ownerUid != request.auth.uid
+          && !(resource.data.get('sessionId', null) == activeSessionId() && activeSessionId() != null)
+        )
+      );
       allow delete: if signedIn()
         && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }

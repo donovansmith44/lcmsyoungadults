@@ -21,13 +21,16 @@ describe('security rules (emulator)', () => {
     await assertFails(setDoc(doc(db, 'sessions', 's1'), { name: 'x', status: 'active' }))
   })
 
-  it('a signed-in user can create a taker they own, but not one owned by another uid', async () => {
+  it('a signed-in user can create a taker they own; a stale name is reclaimable (no active session)', async () => {
     const env = await getTestEnv()
     const a = env.authenticatedContext('uidA', {}).firestore()
     await assertSucceeds(setDoc(doc(a, 'takers', 'bob'),
       { username: 'bob', ownerUid: 'uidA', completed: false }))
+    // Name uniqueness is now scoped to the active session: with none running, another
+    // browser may take over the (stale) name. (See the reclaim tests below for the
+    // active-session case where this is denied.)
     const b = env.authenticatedContext('uidB', {}).firestore()
-    await assertFails(setDoc(doc(b, 'takers', 'bob'),
+    await assertSucceeds(setDoc(doc(b, 'takers', 'bob'),
       { username: 'bob', ownerUid: 'uidB', completed: false }))
   })
 
@@ -124,5 +127,41 @@ describe('security rules (emulator)', () => {
       { username: 'jna', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'A', group: null }))
     await assertFails(setDoc(doc(a, 'takers', 'jnb'),
       { username: 'jnb', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'B', group: null }))
+  })
+
+  it('a name held by a taker in the ACTIVE session cannot be reclaimed by another uid', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'meta', 'activeSession'), { sessionId: 'S' })
+      await setDoc(doc(ctx.firestore(), 'takers', 'alice'),
+        { username: 'alice', ownerUid: 'uidA', completed: false, sharing: false, sessionId: 'S', group: null })
+    })
+    const b = env.authenticatedContext('uidB', {}).firestore()
+    await assertFails(setDoc(doc(b, 'takers', 'alice'),
+      { username: 'alice', ownerUid: 'uidB', completed: false, sharing: false, sessionId: 'S', group: null }))
+  })
+
+  it('a name from a NON-active session can be reclaimed by another uid', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'meta', 'activeSession'), { sessionId: 'Snew' })
+      await setDoc(doc(ctx.firestore(), 'takers', 'bob'),
+        { username: 'bob', ownerUid: 'uidA', completed: true, sharing: false, sessionId: 'Sold', group: null })
+    })
+    const b = env.authenticatedContext('uidB', {}).firestore()
+    await assertSucceeds(setDoc(doc(b, 'takers', 'bob'),
+      { username: 'bob', ownerUid: 'uidB', completed: false, sharing: false, sessionId: 'Snew', group: null }))
+  })
+
+  it('a session-less name can be reclaimed when no session is active', async () => {
+    const env = await getTestEnv()
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      // no meta/activeSession doc at all
+      await setDoc(doc(ctx.firestore(), 'takers', 'cara'),
+        { username: 'cara', ownerUid: 'uidA', completed: false, sharing: false, sessionId: null, group: null })
+    })
+    const b = env.authenticatedContext('uidB', {}).firestore()
+    await assertSucceeds(setDoc(doc(b, 'takers', 'cara'),
+      { username: 'cara', ownerUid: 'uidB', completed: false, sharing: false, sessionId: null, group: null }))
   })
 })

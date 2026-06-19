@@ -62,15 +62,8 @@ describe('takers data layer (emulator)', () => {
     })
   })
 
-  it('throws UsernameTakenError when a different owner claims the name', async () => {
-    const env = await getTestEnv()
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      const db = ctx.firestore()
-      await upsertTaker(db, 'Sam', { ownerUid: 'uidA', sessionId: null })
-      await expect(upsertTaker(db, 'Sam', { ownerUid: 'uidB', sessionId: null }))
-        .rejects.toBeInstanceOf(UsernameTakenError)
-    })
-  })
+  // (Global "name taken forever" behavior was replaced by session-scoped uniqueness —
+  //  see the 'name uniqueness is scoped to the active session' block below.)
 
   it('setSharing cannot turn sharing back off once enabled', async () => {
     const env = await getTestEnv()
@@ -92,6 +85,49 @@ describe('takers data layer (emulator)', () => {
       expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
       await joinSession(db, 'joiner', 'S2') // no-op: already bound
       expect((await getTaker(db, 'joiner'))?.sessionId).toBe('S1')
+    })
+  })
+
+  describe('name uniqueness is scoped to the active session', () => {
+    it('a name held by someone in the SAME active session is taken', async () => {
+      const env = await getTestEnv()
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore()
+        await upsertTaker(db, 'alice', { ownerUid: 'u1', sessionId: 'S' })
+        await expect(upsertTaker(db, 'alice', { ownerUid: 'u2', sessionId: 'S' }))
+          .rejects.toThrow(UsernameTakenError)
+      })
+    })
+
+    it('a name from a past/different session is reclaimable (overwrites the stale taker)', async () => {
+      const env = await getTestEnv()
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore()
+        await upsertTaker(db, 'bob', { ownerUid: 'u1', sessionId: 'Sold' })
+        await expect(upsertTaker(db, 'bob', { ownerUid: 'u2', sessionId: 'Snew' })).resolves.toBeUndefined()
+        const t = await getTaker(db, 'bob')
+        expect(t?.ownerUid).toBe('u2')
+        expect(t?.sessionId).toBe('Snew')
+      })
+    })
+
+    it('a session-less name is reclaimable when no session is active', async () => {
+      const env = await getTestEnv()
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore()
+        await upsertTaker(db, 'cara', { ownerUid: 'u1', sessionId: null })
+        await expect(upsertTaker(db, 'cara', { ownerUid: 'u2', sessionId: null })).resolves.toBeUndefined()
+        expect((await getTaker(db, 'cara'))?.ownerUid).toBe('u2')
+      })
+    })
+
+    it('the same browser (same ownerUid) still resumes its own taker', async () => {
+      const env = await getTestEnv()
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore()
+        await upsertTaker(db, 'dee', { ownerUid: 'u1', sessionId: 'S' })
+        await expect(upsertTaker(db, 'dee', { ownerUid: 'u1', sessionId: 'S' })).resolves.toBeUndefined()
+      })
     })
   })
 })
