@@ -11,9 +11,17 @@ test('Given /personality, When visited, Then it redirects to /personality-test',
   })
 })
 
-test('Given an unknown path, Then it redirects to the test', async ({ page }) => {
+test('Given /, Then the under-construction home shows (not the test)', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText(/under construction/i)).toBeVisible()
+  await expect(page.getByText('1 / 32')).toHaveCount(0) // not the test
+  await expect(page.getByPlaceholder(/username/i)).toHaveCount(0)
+})
+
+test('Given an unknown path, Then it redirects to the home (under construction)', async ({ page }) => {
   await page.goto('/nope/does-not-exist')
-  await expect(page).toHaveURL(/\/personality-test$/)
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText(/under construction/i)).toBeVisible()
 })
 
 test('Given the taker flow, Then it progresses landing → questions → result', async ({ page }) => {
