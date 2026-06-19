@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { OEJTS_ITEMS, scoreType } from './oejts'
-import type { Answers, AnswerValue } from './types'
+import { AXIS_LETTERS } from './types'
+import type { Answers, AnswerValue, Axis } from './types'
 
 const allSame = (v: AnswerValue): Answers =>
   Object.fromEntries(OEJTS_ITEMS.map((i) => [i.id, v])) as Answers
@@ -58,5 +59,61 @@ describe('scoreType', () => {
     const r = scoreType(answers)!
     // Each axis sum becomes 8*? depending on orientation; assert it is a valid type.
     expect(r.type).toMatch(/^[EI][SN][TF][JP]$/)
+  })
+})
+
+// Maps a type string (e.g. "ENFP") to its per-axis target letter.
+const AXIS_OF_INDEX: Axis[] = ['IE', 'SN', 'TF', 'JP']
+
+/**
+ * Build answers a *clear* respondent would give to land on `type`: for every item,
+ * pick the pole (1 or 5) that pushes its axis decisively toward the target letter.
+ * Each axis ends at sum 8 or 40 — far past the 24 cutoff — so the tie rule is irrelevant
+ * and the mapping is "answer like an extravert → get E", etc.
+ */
+function answersForType(type: string): Answers {
+  const ans = {} as Answers
+  for (const item of OEJTS_ITEMS) {
+    const axisIdx = AXIS_OF_INDEX.indexOf(item.axis)
+    const target = type[axisIdx]
+    const { high } = AXIS_LETTERS[item.axis]
+    const wantHigh = target === high
+    // To push the axis sum toward `high`, an item answers 5 if its rightLetter is the
+    // high letter, else 1. Invert to push toward the low letter.
+    const towardHigh: AnswerValue = item.rightLetter === high ? 5 : 1
+    ans[item.id] = (wantHigh ? towardHigh : (6 - towardHigh)) as AnswerValue
+  }
+  return ans
+}
+
+const ALL_16_TYPES: string[] = ['E', 'I'].flatMap((ie) =>
+  ['S', 'N'].flatMap((sn) =>
+    ['T', 'F'].flatMap((tf) =>
+      ['J', 'P'].map((jp) => ie + sn + tf + jp),
+    ),
+  ),
+)
+
+describe('all 16 types are reachable and map realistically', () => {
+  it('enumerates exactly the 16 MBTI types, no dups', () => {
+    expect(ALL_16_TYPES).toHaveLength(16)
+    expect(new Set(ALL_16_TYPES).size).toBe(16)
+  })
+
+  for (const type of ALL_16_TYPES) {
+    it(`clear pole answers for ${type} score as ${type}`, () => {
+      const result = scoreType(answersForType(type))!
+      expect(result.type).toBe(type)
+      // sanity: a decisive respondent lands each axis at an extreme (8 or 40), never the midpoint
+      for (const axis of AXIS_OF_INDEX) {
+        expect([8, 40]).toContain(result.axisScores[axis])
+      }
+    })
+  }
+
+  it('a clearly extraverted/sensing/feeling/perceiving respondent reads as ESFP', () => {
+    // Spot-check the realism in plain terms: answer like a social, concrete, warm,
+    // spontaneous person and you should be typed ESFP — not the all-neutral INTJ default.
+    expect(scoreType(answersForType('ESFP'))!.type).toBe('ESFP')
   })
 })
