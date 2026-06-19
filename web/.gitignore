@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Firebase CLI deploy cache
+.firebase/
+
 # Playwright
 test-results/
 playwright-report/
