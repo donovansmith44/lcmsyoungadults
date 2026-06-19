@@ -38,6 +38,26 @@ test('roster panel minimizes and closes (E11, R7)', async ({ page }) => {
   await page.getByRole('button', { name: /close roster/i }).click()
 })
 
+test('admin Reveal shows a confirmation, not silence', async ({ page }) => {
+  await seedAdmin('admin@x.org')
+  await seedSession('rc', { name: 'Conf', timerMinutes: 30 })
+  await seedTaker('connie', 'rc', { completed: true, type: 'INFJ', seRank: 2, seStrength: 0.4 })
+  await signInAdmin(page, 'admin@x.org')
+  await page.getByRole('button', { name: /^conf/i }).click()
+  await page.getByRole('button', { name: /reveal now/i }).click()
+  await expect(page.getByText(/revealed/i)).toBeVisible() // success confirmation with a count
+})
+
+test('admin auto-opens the active session roster (sees takers + their results)', async ({ page }) => {
+  await seedAdmin('admin@x.org')
+  await seedSession('auto', { name: 'Auto', timerMinutes: 30 })
+  await seedTaker('autodan', 'auto', { completed: true, type: 'ESTP' })
+  await signInAdmin(page, 'admin@x.org')
+  // WITHOUT clicking the session, the active session's roster (people + results) is visible
+  await expect(page.getByText('autodan')).toBeVisible()
+  await expect(page.getByText('ESTP')).toBeVisible()
+})
+
 test('admin overrides a taker group (E12, R8)', async ({ page }) => {
   await seedAdmin('admin@x.org')
   await seedSession('s4', { name: 'Mon', timerMinutes: 30 })

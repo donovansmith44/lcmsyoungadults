@@ -9,8 +9,9 @@ export async function setTakerGroupOverride(db: Firestore, takerId: string, grou
   await updateDoc(doc(db, 'takers', takerId), { group, groupOverride: true })
 }
 
-/** Re-runs the split for a session (even if already frozen), honoring overrides. */
-export async function recomputeSessionGroups(db: Firestore, sessionId: string): Promise<void> {
+/** Re-runs the split for a session (even if already frozen), honoring overrides.
+ *  Returns how many takers were (re)grouped. */
+export async function recomputeSessionGroups(db: Firestore, sessionId: string): Promise<number> {
   const snap = await getDocs(query(collection(db, 'takers'), where('sessionId', '==', sessionId)))
   const takers: TakerForGrouping[] = snap.docs.map((d) => {
     const t = d.data()
@@ -25,6 +26,7 @@ export async function recomputeSessionGroups(db: Firestore, sessionId: string): 
     Object.entries(assignments).map(([id, group]) => updateDoc(doc(db, 'takers', id), { group })),
   )
   await updateDoc(doc(db, 'sessions', sessionId), { groupsFrozenAt: serverTimestamp() })
+  return Object.keys(assignments).length
 }
 
 export async function deleteSession(db: Firestore, id: string): Promise<void> {

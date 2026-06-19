@@ -59,9 +59,14 @@ export function SessionList({ sessions, selectedId, onSelect, onStartOverride }:
             )}
           </div>
           <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
-            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id))}>Reveal now</Button>}
-            <Button onClick={() => runAdmin(recomputeSessionGroups(db, s.id))}>Recompute</Button>
-            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id).then(() => endSession(db, s.id)))}>End</Button>}
+            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id), (r) =>
+              r.alreadyFrozen ? 'Groups were already revealed for this session.'
+                : r.assigned > 0 ? `Revealed — ${r.assigned} participant${r.assigned === 1 ? '' : 's'} now see their activity group.`
+                : 'Revealed — no completed participants to group yet.')}>Reveal now</Button>}
+            <Button onClick={() => runAdmin(recomputeSessionGroups(db, s.id), (n) =>
+              n > 0 ? `Recomputed — ${n} participant${n === 1 ? '' : 's'} regrouped.`
+                : 'Recomputed — no participants to group yet.')}>Recompute</Button>
+            {s.status === 'active' && <Button onClick={() => runAdmin(freezeSessionGroups(db, s.id).then(() => endSession(db, s.id)), 'Session ended.')}>End</Button>}
             {s.status === 'ended' && <Button onClick={() => runAdmin(archiveSession(db, s.id))}>Archive</Button>}
             <Button onClick={() => setToDelete(s)} style={{ background: '#a3322b' }}>Delete</Button>
           </div>
